@@ -1,4 +1,4 @@
-import sqlite3
+﻿import sqlite3
 from pathlib import Path
 
 
@@ -16,6 +16,19 @@ def initialize_database():
                 description TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS habit_completions (
+                id INTEGER PRIMARY KEY,
+                habit_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                completed INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (habit_id) REFERENCES habits(id),
+                UNIQUE (habit_id, date)
             )
             """
         )
