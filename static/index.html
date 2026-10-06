@@ -120,8 +120,16 @@
               </div>
               <span class="reflection-icon" aria-hidden="true">✎</span>
             </div>
-            <label class="sr-only" for="reflection">Write a reflection on your day</label>
-            <textarea id="reflection" rows="4" placeholder="What went well today? What will you carry into tomorrow?"></textarea>
+            <form id="reflection-form">
+              <label class="sr-only" for="reflection-went-well">What went well</label>
+              <textarea id="reflection-went-well" rows="3" placeholder="What went well today?"></textarea>
+              <label class="sr-only" for="reflection-challenges">Challenges</label>
+              <textarea id="reflection-challenges" rows="3" placeholder="What challenges came up?"></textarea>
+              <label class="sr-only" for="reflection-improvement">What to improve</label>
+              <textarea id="reflection-improvement" rows="3" placeholder="What would you improve tomorrow?"></textarea>
+              <button class="task-input" id="reflection-save" type="submit">Save Reflection</button>
+            </form>
+            <p class="panel-description" id="reflection-message" role="status" aria-live="polite"></p>
           </section>
         </aside>
       </div>

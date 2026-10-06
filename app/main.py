@@ -13,6 +13,8 @@ from app.schemas import (
     HabitResponse,
     MITCreate,
     MITResponse,
+    ReflectionCreate,
+    ReflectionResponse,
 )
 
 app = FastAPI()
@@ -317,6 +319,49 @@ def get_mits(date: date):
             (date.isoformat(),),
         ).fetchall()
         return [dict(mit) for mit in mits]
+
+@app.post("/api/reflections", response_model=ReflectionResponse)
+def create_reflection(reflection: ReflectionCreate):
+    reflection_date = reflection.date.isoformat()
+    try:
+        with sqlite3.connect(DATABASE_PATH) as connection:
+            connection.row_factory = sqlite3.Row
+            cursor = connection.execute(
+                "INSERT INTO daily_reflections "
+                "(date, went_well, challenges, improvement) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    reflection_date,
+                    reflection.went_well,
+                    reflection.challenges,
+                    reflection.improvement,
+                ),
+            )
+            created_reflection = connection.execute(
+                "SELECT id, date, went_well, challenges, improvement, created_at "
+                "FROM daily_reflections WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+            return dict(created_reflection)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="A reflection already exists for this date",
+        )
+
+
+@app.get("/api/reflections/{date}", response_model=ReflectionResponse)
+def get_reflection(date: date):
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        reflection = connection.execute(
+            "SELECT id, date, went_well, challenges, improvement, created_at "
+            "FROM daily_reflections WHERE date = ?",
+            (date.isoformat(),),
+        ).fetchone()
+        if reflection is None:
+            raise HTTPException(status_code=404, detail="Reflection not found")
+        return dict(reflection)
 
 @app.get("/")
 async def root():

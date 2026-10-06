@@ -49,3 +49,19 @@ class MITResponse(BaseModel):
     task: str
     completed: int
     created_at: str
+
+
+class ReflectionCreate(BaseModel):
+    date: date
+    went_well: str = ""
+    challenges: str = ""
+    improvement: str = ""
+
+
+class ReflectionResponse(BaseModel):
+    id: int
+    date: date
+    went_well: str
+    challenges: str
+    improvement: str
+    created_at: str

@@ -254,9 +254,62 @@ async function handleHabitChange(checkbox, habit) {
   }
 }
 
+function setReflectionFields(reflection) {
+  document.getElementById("reflection-went-well").value = reflection.went_well;
+  document.getElementById("reflection-challenges").value = reflection.challenges;
+  document.getElementById("reflection-improvement").value = reflection.improvement;
+}
+
+async function loadReflection(today) {
+  const message = document.getElementById("reflection-message");
+  try {
+    const reflection = await getJson(`/api/reflections/${today}`);
+    setReflectionFields(reflection);
+  } catch (error) {
+    if (error.status !== 404 && message) {
+      message.textContent = "Today's reflection couldn't be loaded.";
+    }
+  }
+}
+
+async function handleReflectionSubmit(event) {
+  event.preventDefault();
+  const message = document.getElementById("reflection-message");
+  const button = document.getElementById("reflection-save");
+  const today = getLocalDateString();
+  if (!button) return;
+
+  if (message) message.textContent = "";
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/reflections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: today,
+        went_well: document.getElementById("reflection-went-well").value,
+        challenges: document.getElementById("reflection-challenges").value,
+        improvement: document.getElementById("reflection-improvement").value
+      })
+    });
+
+    if (response.status === 409) {
+      throw new Error("Today's reflection has already been saved.");
+    }
+    if (!response.ok) {
+      throw new Error("Couldn't save today's reflection. Please try again.");
+    }
+    if (message) message.textContent = "Reflection saved.";
+  } catch (error) {
+    if (message) message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
 async function loadDashboard() {
   const today = getLocalDateString();
   void loadMits(today);
+  void loadReflection(today);
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
     getJson(`/api/daily-score/${today}`),
@@ -312,6 +365,7 @@ async function loadDashboard() {
 }
 
 document.getElementById("mit-form")?.addEventListener("submit", handleMitSubmit);
+document.getElementById("reflection-form")?.addEventListener("submit", handleReflectionSubmit);
 
 loadDashboard().catch(() => {
   const habitList = document.getElementById("habit-list");

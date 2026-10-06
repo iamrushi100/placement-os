@@ -55,3 +55,15 @@ def initialize_database():
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_reflections (
+                id INTEGER PRIMARY KEY,
+                date TEXT NOT NULL UNIQUE,
+                went_well TEXT NOT NULL DEFAULT '',
+                challenges TEXT NOT NULL DEFAULT '',
+                improvement TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
