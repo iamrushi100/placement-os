@@ -103,12 +103,13 @@
               </div>
               <span class="section-number">01</span>
             </div>
-            <label class="sr-only" for="mit-one">Most important task one</label>
-            <input class="task-input" id="mit-one" type="text" placeholder="Add your most important task">
-            <label class="sr-only" for="mit-two">Most important task two</label>
-            <input class="task-input" id="mit-two" type="text" placeholder="Add another priority">
-            <label class="sr-only" for="mit-three">Most important task three</label>
-            <input class="task-input" id="mit-three" type="text" placeholder="One more, if needed">
+            <form id="mit-form">
+              <label class="sr-only" for="mit-input">Most important task</label>
+              <input class="task-input" id="mit-input" type="text" placeholder="Add your most important task">
+              <button type="submit" id="mit-add-button">Add MIT</button>
+            </form>
+            <p class="panel-description" id="mit-message" role="status" aria-live="polite"></p>
+            <div class="habit-list" id="mit-list" aria-live="polite"></div>
           </section>
 
           <section class="panel reflection-panel" aria-labelledby="reflection-title">

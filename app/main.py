@@ -11,6 +11,8 @@ from app.schemas import (
     DailyEntryResponse,
     HabitCreate,
     HabitResponse,
+    MITCreate,
+    MITResponse,
 )
 
 app = FastAPI()
@@ -261,6 +263,60 @@ def get_placement_streak():
         "current_streak": current_streak,
     }
 
+
+@app.post("/api/mits", response_model=MITResponse)
+def create_mit(mit: MITCreate):
+    mit_date = mit.date.isoformat()
+    try:
+        with sqlite3.connect(DATABASE_PATH) as connection:
+            connection.row_factory = sqlite3.Row
+            duplicate = connection.execute(
+                "SELECT id FROM daily_mits WHERE date = ? AND task = ?",
+                (mit_date, mit.task),
+            ).fetchone()
+            if duplicate is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This MIT already exists for the date",
+                )
+
+            count = connection.execute(
+                "SELECT COUNT(*) FROM daily_mits WHERE date = ?",
+                (mit_date,),
+            ).fetchone()[0]
+            if count >= 3:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A maximum of 3 MITs is allowed per day",
+                )
+
+            cursor = connection.execute(
+                "INSERT INTO daily_mits (date, task, completed) VALUES (?, ?, 0)",
+                (mit_date, mit.task),
+            )
+            created_mit = connection.execute(
+                "SELECT id, date, task, completed, created_at "
+                "FROM daily_mits WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+            return dict(created_mit)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="This MIT already exists for the date",
+        )
+
+
+@app.get("/api/mits/{date}", response_model=list[MITResponse])
+def get_mits(date: date):
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        mits = connection.execute(
+            "SELECT id, date, task, completed, created_at "
+            "FROM daily_mits WHERE date = ? ORDER BY id",
+            (date.isoformat(),),
+        ).fetchall()
+        return [dict(mit) for mit in mits]
 
 @app.get("/")
 async def root():

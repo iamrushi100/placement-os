@@ -90,6 +90,88 @@ function renderHabits(habits) {
   habits.forEach((habit) => appendHabitRow(habitList, habit));
 }
 
+function renderMits(mits) {
+  const mitList = document.getElementById("mit-list");
+  if (!mitList) return;
+
+  mitList.replaceChildren();
+  if (mits.length === 0) {
+    mitList.textContent = "No MITs added yet.";
+    return;
+  }
+
+  mits.forEach((mit, index) => {
+    const row = document.createElement("div");
+    row.className = "habit-row";
+
+    const number = document.createElement("span");
+    number.className = "count-pill";
+    number.textContent = String(index + 1);
+
+    const task = document.createElement("span");
+    task.className = "habit-name";
+    task.textContent = mit.task;
+
+    row.append(number, task);
+    if (Object.hasOwn(mit, "completed")) {
+      const status = document.createElement("span");
+      status.className = `habit-category ${mit.completed ? "technical" : "placement"}`;
+      status.textContent = mit.completed ? "Completed" : "Pending";
+      row.append(status);
+    }
+    mitList.append(row);
+  });
+}
+
+async function loadMits(today) {
+  const mitList = document.getElementById("mit-list");
+  try {
+    const mits = await getJson(`/api/mits/${today}`);
+    renderMits(mits);
+    return true;
+  } catch {
+    if (mitList) mitList.textContent = "Today's MITs couldn't be loaded.";
+    return false;
+  }
+}
+
+async function handleMitSubmit(event) {
+  event.preventDefault();
+  const input = document.getElementById("mit-input");
+  const button = document.getElementById("mit-add-button");
+  const today = getLocalDateString();
+  const message = document.getElementById("mit-message");
+  if (!input || !button) return;
+
+  if (message) message.textContent = "";
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/mits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: today, task: input.value })
+    });
+
+    if (!response.ok) {
+      const messages = {
+        400: "Maximum of 3 MITs reached for today.",
+        409: "This MIT already exists for today.",
+        422: "Task cannot be empty."
+      };
+      throw new Error(messages[response.status] || "Couldn't add MIT. Please try again.");
+    }
+
+    input.value = "";
+    if (!(await loadMits(today)) && message) {
+      message.textContent = "MIT added, but today's list couldn't be refreshed.";
+    }
+  } catch (error) {
+    if (message) message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function refreshAfterCompletion(today) {
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
@@ -174,6 +256,7 @@ async function handleHabitChange(checkbox, habit) {
 
 async function loadDashboard() {
   const today = getLocalDateString();
+  void loadMits(today);
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
     getJson(`/api/daily-score/${today}`),
@@ -227,6 +310,8 @@ async function loadDashboard() {
     if (habitList) habitList.textContent = "Habit list couldn't be loaded.";
   }
 }
+
+document.getElementById("mit-form")?.addEventListener("submit", handleMitSubmit);
 
 loadDashboard().catch(() => {
   const habitList = document.getElementById("habit-list");
