@@ -3,9 +3,18 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException
 from app.database import DATABASE_PATH, initialize_database
-from app.schemas import HabitCreate, HabitResponse
+from app.schemas import (
+    DailyEntryCreate,
+    DailyEntryResponse,
+    HabitCreate,
+    HabitResponse,
+)
 
 app = FastAPI()
+
+SPRINT_START = date(2026, 10, 6)
+SPRINT_END = date(2026, 11, 5)
+PLACEMENT_THRESHOLD = 60
 
 
 @app.on_event("startup")
@@ -18,6 +27,59 @@ def calculate_current_streak(completion_dates: list[str], today: date) -> int:
     streak = 0
     current_day = today
     while current_day.isoformat() in completed_days:
+        streak += 1
+        current_day -= timedelta(days=1)
+    return streak
+
+
+def calculate_daily_score(connection: sqlite3.Connection, requested_date: date) -> dict:
+    date_string = requested_date.isoformat()
+    daily_entry = connection.execute(
+        "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
+        (date_string,),
+    ).fetchone()
+    deep_work_minutes = daily_entry[0] if daily_entry else 0
+
+    technical_completed = connection.execute(
+        "SELECT COUNT(*) FROM habit_completions AS completion "
+        "JOIN habits AS habit ON habit.id = completion.habit_id "
+        "WHERE completion.date = ? AND completion.completed = 1 "
+        "AND habit.category = 'Technical'",
+        (date_string,),
+    ).fetchone()[0]
+    placement_completed = connection.execute(
+        "SELECT COUNT(*) FROM habit_completions AS completion "
+        "JOIN habits AS habit ON habit.id = completion.habit_id "
+        "WHERE completion.date = ? AND completion.completed = 1 "
+        "AND habit.category = 'Placement'",
+        (date_string,),
+    ).fetchone()[0]
+
+    deep_work_points = min(deep_work_minutes / 180, 1) * 40
+    technical_points = technical_completed / 5 * 30
+    placement_points = placement_completed / 5 * 30
+    score = int(round(deep_work_points + technical_points + placement_points))
+
+    return {
+        "date": date_string,
+        "score": score,
+        "deep_work_points": deep_work_points,
+        "technical_points": technical_points,
+        "placement_points": placement_points,
+        "technical_completed": technical_completed,
+        "placement_completed": placement_completed,
+    }
+
+
+def calculate_placement_streak(scores_by_date: dict[str, int], today: date) -> int:
+    if today < SPRINT_START:
+        return 0
+
+    current_day = min(today, SPRINT_END)
+    streak = 0
+    while current_day >= SPRINT_START:
+        if scores_by_date.get(current_day.isoformat(), 0) < PLACEMENT_THRESHOLD:
+            break
         streak += 1
         current_day -= timedelta(days=1)
     return streak
@@ -101,6 +163,72 @@ def get_habit_streak(habit_id: int):
         [row[0] for row in completion_dates], date.today()
     )
     return {"habit_id": habit_id, "current_streak": current_streak}
+
+
+@app.post("/api/daily-entries", response_model=DailyEntryResponse)
+def create_daily_entry(entry: DailyEntryCreate):
+    try:
+        with sqlite3.connect(DATABASE_PATH) as connection:
+            connection.row_factory = sqlite3.Row
+            cursor = connection.execute(
+                "INSERT INTO daily_entries (date, deep_work_minutes) "
+                "VALUES (?, ?)",
+                (entry.date.isoformat(), entry.deep_work_minutes),
+            )
+            created_entry = connection.execute(
+                "SELECT id, date, deep_work_minutes, created_at "
+                "FROM daily_entries WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+            return dict(created_entry)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="A daily entry already exists for this date",
+        )
+
+
+@app.get("/api/daily-entries/{date}", response_model=DailyEntryResponse)
+def get_daily_entry(date: date):
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        entry = connection.execute(
+            "SELECT id, date, deep_work_minutes, created_at "
+            "FROM daily_entries WHERE date = ?",
+            (date.isoformat(),),
+        ).fetchone()
+        if entry is None:
+            raise HTTPException(status_code=404, detail="Daily entry not found")
+        return dict(entry)
+
+
+@app.get("/api/daily-score/{date}")
+def get_daily_score(date: date):
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        return calculate_daily_score(connection, date)
+
+
+@app.get("/api/placement-streak")
+def get_placement_streak():
+    today = date.today()
+    scores_by_date = {}
+    last_sprint_day = min(today, SPRINT_END)
+
+    if today >= SPRINT_START:
+        with sqlite3.connect(DATABASE_PATH) as connection:
+            current_day = SPRINT_START
+            while current_day <= last_sprint_day:
+                daily_score = calculate_daily_score(connection, current_day)
+                scores_by_date[current_day.isoformat()] = daily_score["score"]
+                current_day += timedelta(days=1)
+
+    current_streak = calculate_placement_streak(scores_by_date, today)
+    return {
+        "sprint_start": SPRINT_START.isoformat(),
+        "sprint_end": SPRINT_END.isoformat(),
+        "threshold": PLACEMENT_THRESHOLD,
+        "current_streak": current_streak,
+    }
 
 
 @app.get("/")
