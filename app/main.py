@@ -1,7 +1,10 @@
 ﻿import sqlite3
 from datetime import date, timedelta
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from app.database import DATABASE_PATH, initialize_database
 from app.schemas import (
     DailyEntryCreate,
@@ -11,6 +14,8 @@ from app.schemas import (
 )
 
 app = FastAPI()
+STATIC_DIR = Path(__file__).resolve().parent.parent / 'static'
+app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')
 
 SPRINT_START = date(2026, 10, 6)
 SPRINT_END = date(2026, 11, 5)
@@ -111,6 +116,32 @@ def get_habits():
         ).fetchall()
         return [dict(habit) for habit in habits]
 
+
+@app.get("/api/habits/today")
+def get_today_habits():
+    today = date.today().isoformat()
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        habits = connection.execute(
+            "SELECT habit.id, habit.name, habit.category, habit.description, "
+            "CASE WHEN completion.id IS NULL THEN 0 ELSE 1 END AS completed "
+            "FROM habits AS habit "
+            "LEFT JOIN habit_completions AS completion "
+            "ON completion.habit_id = habit.id "
+            "AND completion.date = ? AND completion.completed = 1 "
+            "WHERE habit.is_active = 1 ORDER BY habit.id",
+            (today,),
+        ).fetchall()
+        return [
+            {
+                "id": habit["id"],
+                "name": habit["name"],
+                "category": habit["category"],
+                "description": habit["description"],
+                "completed": bool(habit["completed"]),
+            }
+            for habit in habits
+        ]
 
 @app.post("/api/habits/{habit_id}/complete")
 def complete_habit(habit_id: int):
@@ -233,4 +264,4 @@ def get_placement_streak():
 
 @app.get("/")
 async def root():
-    return {"message": "Placement Streak Tracker API is running"}
+    return FileResponse(STATIC_DIR / "index.html")

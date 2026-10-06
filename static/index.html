@@ -1,0 +1,131 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6f2">
+  <title>Placement Streak Tracker</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Placement Streak Tracker home">
+        <span class="brand-mark" aria-hidden="true">P</span>
+        <span class="brand-name">Placement Streak Tracker</span>
+      </a>
+      <div class="sprint-label">
+        <span class="sprint-dot" aria-hidden="true"></span>
+        <span>30-Day Placement Sprint</span>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="welcome-row" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">YOUR DAILY WORKSPACE</p>
+          <h1 id="page-title">Make today count.</h1>
+          <p class="welcome-copy">A steady rhythm of focused work moves you closer to your next opportunity.</p>
+        </div>
+        <div class="day-pill">
+          <span class="day-label">SPRINT PROGRESS</span>
+          <strong>Day 1 <span>/ 30</span></strong>
+        </div>
+      </section>
+
+      <section class="summary-grid" aria-label="Today's summary">
+        <article class="summary-card streak-card">
+          <div class="card-icon streak-icon" aria-hidden="true">↗</div>
+          <div>
+            <p class="summary-label">Placement Streak</p>
+            <p class="summary-value" id="placement-streak-value">— <span>days</span></p>
+            <p class="summary-note" id="placement-streak-note">Keep showing up, one day at a time</p>
+          </div>
+          <span class="card-spark" aria-hidden="true">✳</span>
+        </article>
+        <article class="summary-card score-card">
+          <div class="card-icon score-icon" aria-hidden="true">◎</div>
+          <div>
+            <p class="summary-label">Daily Score</p>
+            <p class="summary-value" id="daily-score-value">— <span>/ 100</span></p>
+            <p class="summary-note" id="daily-score-note">Your effort, added up for today</p>
+          </div>
+          <div class="score-ring" aria-hidden="true"><span id="daily-score-ring">—</span></div>
+        </article>
+      </section>
+
+      <div class="dashboard-grid">
+        <section class="panel habits-panel" aria-labelledby="habits-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">BUILD YOUR MOMENTUM</p>
+              <h2 id="habits-title">Today's habits</h2>
+            </div>
+            <span class="count-pill" id="habit-count">10 habits</span>
+          </div>
+          <p class="panel-description">Mark the work you complete today.</p>
+
+          <div class="habit-list" id="habit-list">
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">DSA</span><span class="habit-category technical">Technical</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">Python</span><span class="habit-category technical">Technical</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">CS Fundamentals</span><span class="habit-category technical">Technical</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">System Design</span><span class="habit-category technical">Technical</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">AI/ML</span><span class="habit-category technical">Technical</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">Assessment Preparation</span><span class="habit-category placement">Placement</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">Project Work</span><span class="habit-category placement">Placement</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">Portfolio</span><span class="habit-category placement">Placement</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">Applications</span><span class="habit-category placement">Placement</span></label>
+            <label class="habit-row"><input type="checkbox"><span class="custom-check" aria-hidden="true"></span><span class="habit-name">Interview Preparation</span><span class="habit-category placement">Placement</span></label>
+          </div>
+        </section>
+
+        <aside class="side-column">
+          <section class="panel deep-work-panel" aria-labelledby="deep-work-title">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">FOCUSED TIME</p>
+                <h2 id="deep-work-title">Deep work</h2>
+              </div>
+              <span class="deep-work-icon" aria-hidden="true">◷</span>
+            </div>
+            <p class="deep-work-value" id="deep-work-value">180 <span>minutes</span></p>
+            <p class="panel-description" id="deep-work-note">A placeholder for your focused work today.</p>
+            <div class="goal-row"><span>Daily focus goal</span><span>3 hours</span></div>
+            <div class="goal-track" aria-hidden="true"><span></span></div>
+          </section>
+
+          <section class="panel mits-panel" aria-labelledby="mits-title">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">FOCUS ON WHAT MATTERS</p>
+                <h2 id="mits-title">Today's MITs</h2>
+              </div>
+              <span class="section-number">01</span>
+            </div>
+            <label class="sr-only" for="mit-one">Most important task one</label>
+            <input class="task-input" id="mit-one" type="text" placeholder="Add your most important task">
+            <label class="sr-only" for="mit-two">Most important task two</label>
+            <input class="task-input" id="mit-two" type="text" placeholder="Add another priority">
+            <label class="sr-only" for="mit-three">Most important task three</label>
+            <input class="task-input" id="mit-three" type="text" placeholder="One more, if needed">
+          </section>
+
+          <section class="panel reflection-panel" aria-labelledby="reflection-title">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">CLOSE THE DAY WITH INTENTION</p>
+                <h2 id="reflection-title">Daily reflection</h2>
+              </div>
+              <span class="reflection-icon" aria-hidden="true">✎</span>
+            </div>
+            <label class="sr-only" for="reflection">Write a reflection on your day</label>
+            <textarea id="reflection" rows="4" placeholder="What went well today? What will you carry into tomorrow?"></textarea>
+          </section>
+        </aside>
+      </div>
+      <footer class="page-footer"><span>Progress is built one focused day at a time.</span><span class="footer-mark">PLACEMENT SPRINT <b>·</b> 30 DAYS</span></footer>
+    </main>
+  </div>
+</body>
+</html>
