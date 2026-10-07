@@ -30,7 +30,7 @@
         </div>
         <div class="day-pill">
           <span class="day-label">SPRINT PROGRESS</span>
-          <strong>Day 1 <span>/ 30</span></strong>
+          <strong id="sprint-day-value">Day 1 / 31</strong>
         </div>
       </section>
 
@@ -120,8 +120,17 @@
               </div>
               <span class="deep-work-icon" aria-hidden="true">◷</span>
             </div>
-            <p class="deep-work-value" id="deep-work-value">180 <span>minutes</span></p>
-            <p class="panel-description" id="deep-work-note">A placeholder for your focused work today.</p>
+            <p class="deep-work-value" id="deep-work-value">0 <span>minutes</span></p>
+            <p class="panel-description" id="deep-work-note">Today's focused work.</p>
+            <form id="deep-work-form">
+              <label class="sr-only" for="deep-work-minutes">Deep-work minutes</label>
+              <div class="deep-work-input-row">
+                <input class="task-input" id="deep-work-minutes" type="number" min="0" step="1" value="0">
+                <span>minutes</span>
+              </div>
+              <button class="task-input" id="deep-work-save" type="submit">Save Deep Work</button>
+            </form>
+            <p class="panel-description" id="deep-work-message" role="status" aria-live="polite"></p>
             <div class="goal-row"><span>Daily focus goal</span><span>3 hours</span></div>
             <div class="goal-track" aria-hidden="true"><span></span></div>
           </section>

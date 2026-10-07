@@ -108,6 +108,10 @@ h2 { margin: 0; font-size: 18px; line-height: 1.25; letter-spacing: -.45px; font
 .compact-heading { align-items: flex-start; }
 .compact-heading .eyebrow { margin-bottom: 5px; }
 .deep-work-icon, .reflection-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: #edf4ed; color: var(--green); font-size: 18px; }
+.deep-work-input-row { display: flex; align-items: center; gap: 9px; }
+.deep-work-input-row .task-input { min-width: 0; flex: 1; }
+.deep-work-input-row span { margin-top: 9px; color: #748178; font-size: 11px; }
+.task-input:disabled { opacity: .62; cursor: not-allowed; }
 .deep-work-value { margin: 19px 0 1px; font-size: 32px; line-height: 1.1; letter-spacing: -1.1px; font-weight: 680; }
 .deep-work-value span { color: #748178; font-size: 13px; font-weight: 500; letter-spacing: 0; }
 .deep-work-panel .panel-description { margin: 7px 0 17px; }
@@ -128,6 +132,7 @@ textarea { display: block; width: 100%; min-height: 96px; resize: vertical; marg
 .sprint-history-table td { padding: 10px 13px; border-top: 1px solid #edf0ec; color: #516057; font-size: 11px; white-space: nowrap; }
 .sprint-history-table .today-row { background: #edf4ee; }
 .history-status { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 9px; font-weight: 650; }
+.history-status.in-progress { background: #eaf0f1; color: #536c73; }
 .history-status.successful { background: #e7f1e6; color: #41694c; }
 .history-status.needs-work { background: #f4f0e7; color: #85734d; }
 .history-status.upcoming { background: #f0f2ef; color: #78837b; }
