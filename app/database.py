@@ -5,7 +5,7 @@ from typing import Iterator
 
 
 DATABASE_PATH = Path(__file__).resolve().parent.parent / "placement.db"
-LATEST_SCHEMA_VERSION = 1
+LATEST_SCHEMA_VERSION = 2
 
 
 @contextmanager
@@ -79,7 +79,38 @@ def _create_current_tables(connection: sqlite3.Connection) -> None:
     )
 
 
-MIGRATIONS = ((1, _create_current_tables),)
+def _create_opportunities_table(connection: sqlite3.Connection) -> None:
+    """Add the V2 placement opportunities inbox and application pipeline."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS opportunities (
+            id INTEGER PRIMARY KEY,
+            company TEXT NOT NULL CHECK (length(trim(company)) > 0),
+            role TEXT NOT NULL CHECK (length(trim(role)) > 0),
+            location TEXT,
+            source TEXT,
+            job_link TEXT,
+            status TEXT NOT NULL DEFAULT 'Interested'
+                CHECK (status IN (
+                    'Interested', 'Applied', 'Assessment', 'Interview', 'HR',
+                    'Selected', 'Rejected', 'Withdrawn', 'Not Eligible', 'Expired'
+                )),
+            priority TEXT NOT NULL DEFAULT 'Medium'
+                CHECK (priority IN ('Low', 'Medium', 'High')),
+            ctc TEXT,
+            deadline TEXT,
+            referral TEXT,
+            eligibility TEXT,
+            requirements TEXT,
+            notes TEXT,
+            is_serious INTEGER NOT NULL DEFAULT 0
+                CHECK (is_serious IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+MIGRATIONS = ((1, _create_current_tables), (2, _create_opportunities_table))
 
 
 def initialize_database() -> None:

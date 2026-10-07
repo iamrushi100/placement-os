@@ -48,3 +48,49 @@ and review database changes against a copy of the local SQLite file.
 V2 changes should solve a defined user need while retaining the existing simple
 architecture. Add dependencies, layers, or API behavior changes only when a
 specific feature requires them and its impact is documented and tested.
+## Module 1 — Placement Opportunities
+
+### Purpose
+
+Capture relevant roles in one place, evaluate them, and promote selected roles
+into a serious application pipeline without automating job discovery or
+applications.
+
+### Opportunity Inbox and Serious Applications
+
+Every opportunity is stored in the `opportunities` table. New records default to
+`is_serious = false` and `Interested`, so they begin in the inbox. Set
+`is_serious = true` when the opportunity is worth actively pursuing. The
+pipeline status can then move through `Interested`, `Applied`, `Assessment`,
+`Interview`, `HR`, `Selected`, or `Rejected`; `Withdrawn`, `Not Eligible`, and
+`Expired` are also supported.
+
+Priority is `Low`, `Medium`, or `High`. Company and role are required. Location,
+source, link, CTC, deadline, referral, eligibility, requirements, and notes are
+optional. CTC is stored as text to support ranges and varied employer formats.
+
+### Database and API
+
+Schema migration version 2 adds one opportunities table with status and priority
+constraints, an inbox/serious flag, and creation/update timestamps. It does not
+replace or rewrite V1 data.
+
+- `POST /api/opportunities` — create an inbox or serious opportunity.
+- `GET /api/opportunities?serious=true&status=Applied` — list, optionally
+  filtered by seriousness and status.
+- `GET /api/opportunities/{opportunity_id}` — retrieve one record.
+- `PUT /api/opportunities/{opportunity_id}` — update supplied fields, including
+  status and seriousness.
+- `DELETE /api/opportunities/{opportunity_id}` — delete a record.
+
+The API uses Pydantic validation and parameterized SQLite queries. Invalid
+status/priority values are rejected; missing records return HTTP 404.
+
+### Design decisions and verification
+
+The inbox and serious application flow share one table, distinguished by
+`is_serious`; pipeline stages are represented by a constrained status value.
+This keeps the model easy to explain and avoids redundant tables or additional
+layers. Standard-library tests cover migration repeatability and preservation,
+create/read/list/update, inbox promotion, filtering, delete, invalid input,
+missing IDs, and a V1 habit completion/score workflow. All six tests pass.

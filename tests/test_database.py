@@ -15,8 +15,13 @@ from app.main import (
     get_daily_score,
     get_habits,
     get_today_habits,
+    create_opportunity,
+    delete_opportunity,
+    get_opportunities,
+    get_opportunity,
+    update_opportunity,
 )
-from app.schemas import HabitCreate
+from app.schemas import HabitCreate, OpportunityCreate, OpportunityResponse, OpportunityUpdate
 
 
 EXPECTED_TABLES = {
@@ -25,6 +30,7 @@ EXPECTED_TABLES = {
     "daily_entries",
     "daily_mits",
     "daily_reflections",
+    "opportunities",
 }
 
 
@@ -158,6 +164,81 @@ class ExistingApiWorkflowTests(unittest.TestCase):
                     complete_habit(habit["id"])
                 self.assertEqual(duplicate.exception.status_code, 409)
 
+
+
+class OpportunityApiTests(unittest.TestCase):
+    def test_opportunity_inbox_pipeline_filters_and_delete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "opportunities.db"
+            with patch("app.database.DATABASE_PATH", database_path):
+                initialize_database()
+
+            with patch("app.main.DATABASE_PATH", database_path):
+                self.assertEqual(get_opportunities(), [])
+
+                inbox_item = create_opportunity(
+                    OpportunityCreate(
+                        company="Example Labs",
+                        role="Backend Engineer",
+                        source="Company site",
+                        deadline=date(2026, 11, 1),
+                    )
+                )
+                response = OpportunityResponse.model_validate(inbox_item)
+                self.assertEqual(response.status, "Interested")
+                self.assertEqual(response.priority, "Medium")
+                self.assertFalse(response.is_serious)
+                self.assertEqual(get_opportunity(response.id)["company"], "Example Labs")
+                self.assertEqual(len(get_opportunities()), 1)
+                self.assertEqual(
+                    len(get_opportunities(serious=False, status="Interested")), 1
+                )
+
+                promoted = update_opportunity(
+                    response.id,
+                    OpportunityUpdate(
+                        is_serious=True,
+                        status="Applied",
+                        priority="High",
+                        notes="Application submitted",
+                    ),
+                )
+                self.assertTrue(promoted["is_serious"])
+                self.assertEqual(promoted["status"], "Applied")
+                self.assertEqual(len(get_opportunities(serious=True)), 1)
+                self.assertEqual(len(get_opportunities(status="Applied")), 1)
+                self.assertEqual(get_opportunities(serious=False), [])
+
+                second = create_opportunity(
+                    OpportunityCreate(company="Other Co", role="Analyst")
+                )
+                self.assertIsNone(delete_opportunity(second["id"]))
+                self.assertEqual(len(get_opportunities()), 1)
+
+                for operation in (
+                    lambda: get_opportunity(9999),
+                    lambda: update_opportunity(9999, OpportunityUpdate(notes="x")),
+                    lambda: delete_opportunity(9999),
+                ):
+                    with self.assertRaises(HTTPException) as missing:
+                        operation()
+                    self.assertEqual(missing.exception.status_code, 404)
+
+    def test_invalid_opportunity_fields_are_rejected(self):
+        for payload in (
+            {"company": "", "role": "Engineer"},
+            {"company": "Example", "role": "  "},
+            {"company": "Example", "role": "Engineer", "status": "Unknown"},
+            {"company": "Example", "role": "Engineer", "priority": "Urgent"},
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValueError):
+                    OpportunityCreate.model_validate(payload)
+
+        for payload in ({"status": "Unknown"}, {"priority": "Urgent"}, {"company": None}):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValueError):
+                    OpportunityUpdate.model_validate(payload)
 
 if __name__ == "__main__":
     unittest.main()

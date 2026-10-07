@@ -15,6 +15,10 @@ from app.schemas import (
     MITResponse,
     ReflectionCreate,
     ReflectionResponse,
+    OpportunityCreate,
+    OpportunityResponse,
+    OpportunityStatus,
+    OpportunityUpdate,
 )
 
 app = FastAPI()
@@ -449,6 +453,119 @@ def get_reflection(date: date):
         if reflection is None:
             raise HTTPException(status_code=404, detail="Reflection not found")
         return dict(reflection)
+
+
+OPPORTUNITY_SELECT = (
+    "id, company, role, location, source, job_link, status, priority, ctc, "
+    "deadline, referral, eligibility, requirements, notes, is_serious, "
+    "created_at, updated_at"
+)
+
+
+@app.post("/api/opportunities", response_model=OpportunityResponse)
+def create_opportunity(opportunity: OpportunityCreate):
+    values = opportunity.model_dump()
+    values["deadline"] = values["deadline"].isoformat() if values["deadline"] else None
+    values["is_serious"] = int(values["is_serious"])
+    fields = (
+        "company, role, location, source, job_link, status, priority, ctc, "
+        "deadline, referral, eligibility, requirements, notes, is_serious"
+    )
+    placeholders = ", ".join("?" for _ in range(14))
+
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.execute(
+            f"INSERT INTO opportunities ({fields}) VALUES ({placeholders})",
+            tuple(values[field] for field in fields.split(", ")),
+        )
+        created = connection.execute(
+            f"SELECT {OPPORTUNITY_SELECT} FROM opportunities WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+        return dict(created)
+
+
+@app.get("/api/opportunities", response_model=list[OpportunityResponse])
+def get_opportunities(
+    serious: bool | None = None,
+    status: OpportunityStatus | None = None,
+):
+    conditions = []
+    parameters = []
+    if serious is not None:
+        conditions.append("is_serious = ?")
+        parameters.append(int(serious))
+    if status is not None:
+        conditions.append("status = ?")
+        parameters.append(status)
+
+    query = f"SELECT {OPPORTUNITY_SELECT} FROM opportunities"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY id"
+
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        opportunities = connection.execute(query, parameters).fetchall()
+        return [dict(opportunity) for opportunity in opportunities]
+
+
+@app.get("/api/opportunities/{opportunity_id}", response_model=OpportunityResponse)
+def get_opportunity(opportunity_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        opportunity = connection.execute(
+            f"SELECT {OPPORTUNITY_SELECT} FROM opportunities WHERE id = ?",
+            (opportunity_id,),
+        ).fetchone()
+        if opportunity is None:
+            raise HTTPException(status_code=404, detail="Opportunity not found")
+        return dict(opportunity)
+
+
+@app.put("/api/opportunities/{opportunity_id}", response_model=OpportunityResponse)
+def update_opportunity(opportunity_id: int, changes: OpportunityUpdate):
+    updates = changes.model_dump(exclude_unset=True)
+    if "deadline" in updates and updates["deadline"] is not None:
+        updates["deadline"] = updates["deadline"].isoformat()
+    if "is_serious" in updates:
+        updates["is_serious"] = int(updates["is_serious"])
+
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        if updates:
+            assignments = [f"{field} = ?" for field in updates]
+            assignments.append("updated_at = CURRENT_TIMESTAMP")
+            cursor = connection.execute(
+                "UPDATE opportunities SET " + ", ".join(assignments)
+                + " WHERE id = ?",
+                (*updates.values(), opportunity_id),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Opportunity not found")
+        else:
+            exists = connection.execute(
+                "SELECT 1 FROM opportunities WHERE id = ?", (opportunity_id,)
+            ).fetchone()
+            if exists is None:
+                raise HTTPException(status_code=404, detail="Opportunity not found")
+
+        updated = connection.execute(
+            f"SELECT {OPPORTUNITY_SELECT} FROM opportunities WHERE id = ?",
+            (opportunity_id,),
+        ).fetchone()
+        return dict(updated)
+
+
+@app.delete("/api/opportunities/{opportunity_id}", status_code=204)
+def delete_opportunity(opportunity_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        cursor = connection.execute(
+            "DELETE FROM opportunities WHERE id = ?", (opportunity_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Opportunity not found")
 
 @app.get("/")
 async def root():
