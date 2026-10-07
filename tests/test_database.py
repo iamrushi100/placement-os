@@ -31,6 +31,8 @@ EXPECTED_TABLES = {
     "daily_mits",
     "daily_reflections",
     "opportunities",
+    "preparation_categories",
+    "preparation_topics",
 }
 
 

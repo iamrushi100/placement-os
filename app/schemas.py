@@ -163,3 +163,98 @@ class OpportunityResponse(BaseModel):
     is_serious: bool
     created_at: str
     updated_at: str
+PreparationTopicStatus = Literal["Not Started", "In Progress", "Completed"]
+
+
+class PreparationCategoryCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def category_name_must_not_be_empty(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("Category name must not be empty")
+        return name
+
+
+class PreparationCategoryUpdate(BaseModel):
+    name: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def supplied_category_name_must_not_be_empty(
+        cls, value: str | None
+    ) -> str | None:
+        if value is None:
+            return value
+        name = value.strip()
+        if not name:
+            raise ValueError("Category name must not be empty")
+        return name
+
+    @model_validator(mode="after")
+    def provided_name_cannot_be_null(self):
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Category name cannot be null")
+        return self
+
+
+class PreparationCategoryResponse(BaseModel):
+    id: int
+    name: str
+    created_at: str
+
+
+class PreparationTopicCreate(BaseModel):
+    category_id: int
+    name: str
+    status: PreparationTopicStatus = "Not Started"
+    practice_count: int = Field(default=0, ge=0)
+    notes: str = ""
+
+    @field_validator("name")
+    @classmethod
+    def topic_name_must_not_be_empty(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("Topic name must not be empty")
+        return name
+
+
+class PreparationTopicUpdate(BaseModel):
+    category_id: int | None = None
+    name: str | None = None
+    status: PreparationTopicStatus | None = None
+    practice_count: int | None = Field(default=None, ge=0)
+    notes: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def supplied_topic_name_must_not_be_empty(
+        cls, value: str | None
+    ) -> str | None:
+        if value is None:
+            return value
+        name = value.strip()
+        if not name:
+            raise ValueError("Topic name must not be empty")
+        return name
+
+    @model_validator(mode="after")
+    def required_fields_cannot_be_cleared(self):
+        for field_name in ("category_id", "name", "status", "practice_count"):
+            if field_name in self.model_fields_set and getattr(self, field_name) is None:
+                raise ValueError(f"{field_name} cannot be null")
+        return self
+
+
+class PreparationTopicResponse(BaseModel):
+    id: int
+    category_id: int
+    name: str
+    status: PreparationTopicStatus
+    practice_count: int
+    notes: str
+    created_at: str
+    updated_at: str

@@ -19,6 +19,13 @@ from app.schemas import (
     OpportunityResponse,
     OpportunityStatus,
     OpportunityUpdate,
+    PreparationCategoryCreate,
+    PreparationCategoryResponse,
+    PreparationCategoryUpdate,
+    PreparationTopicCreate,
+    PreparationTopicResponse,
+    PreparationTopicStatus,
+    PreparationTopicUpdate,
 )
 
 app = FastAPI()
@@ -566,6 +573,258 @@ def delete_opportunity(opportunity_id: int):
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Opportunity not found")
+
+
+PREPARATION_TOPIC_SELECT = (
+    "id, category_id, name, status, practice_count, notes, created_at, updated_at"
+)
+
+
+@app.post(
+    "/api/preparation/categories",
+    response_model=PreparationCategoryResponse,
+)
+def create_preparation_category(category: PreparationCategoryCreate):
+    try:
+        with database_connection(DATABASE_PATH) as connection:
+            connection.row_factory = sqlite3.Row
+            cursor = connection.execute(
+                "INSERT INTO preparation_categories (name) VALUES (?)",
+                (category.name,),
+            )
+            created = connection.execute(
+                "SELECT id, name, created_at FROM preparation_categories WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+            return dict(created)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409, detail="A preparation category with this name already exists"
+        )
+
+
+@app.get(
+    "/api/preparation/categories",
+    response_model=list[PreparationCategoryResponse],
+)
+def get_preparation_categories():
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        categories = connection.execute(
+            "SELECT id, name, created_at FROM preparation_categories ORDER BY id"
+        ).fetchall()
+        return [dict(category) for category in categories]
+
+
+@app.put(
+    "/api/preparation/categories/{category_id}",
+    response_model=PreparationCategoryResponse,
+)
+def update_preparation_category(
+    category_id: int, changes: PreparationCategoryUpdate
+):
+    if "name" not in changes.model_fields_set:
+        with database_connection(DATABASE_PATH) as connection:
+            connection.row_factory = sqlite3.Row
+            category = connection.execute(
+                "SELECT id, name, created_at FROM preparation_categories WHERE id = ?",
+                (category_id,),
+            ).fetchone()
+            if category is None:
+                raise HTTPException(status_code=404, detail="Category not found")
+            return dict(category)
+
+    try:
+        with database_connection(DATABASE_PATH) as connection:
+            connection.row_factory = sqlite3.Row
+            cursor = connection.execute(
+                "UPDATE preparation_categories SET name = ? WHERE id = ?",
+                (changes.name, category_id),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Category not found")
+            updated = connection.execute(
+                "SELECT id, name, created_at FROM preparation_categories WHERE id = ?",
+                (category_id,),
+            ).fetchone()
+            return dict(updated)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409, detail="A preparation category with this name already exists"
+        )
+
+@app.delete("/api/preparation/categories/{category_id}", status_code=204)
+def delete_preparation_category(category_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        exists = connection.execute(
+            "SELECT 1 FROM preparation_categories WHERE id = ?", (category_id,)
+        ).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        topic_count = connection.execute(
+            "SELECT COUNT(*) FROM preparation_topics WHERE category_id = ?",
+            (category_id,),
+        ).fetchone()[0]
+        if topic_count:
+            raise HTTPException(
+                status_code=409,
+                detail="Delete or move this category's topics before deleting it",
+            )
+        connection.execute(
+            "DELETE FROM preparation_categories WHERE id = ?", (category_id,)
+        )
+
+
+@app.post(
+    "/api/preparation/topics",
+    response_model=PreparationTopicResponse,
+)
+def create_preparation_topic(topic: PreparationTopicCreate):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        category = connection.execute(
+            "SELECT 1 FROM preparation_categories WHERE id = ?",
+            (topic.category_id,),
+        ).fetchone()
+        if category is None:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        cursor = connection.execute(
+            "INSERT INTO preparation_topics "
+            "(category_id, name, status, practice_count, notes) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                topic.category_id,
+                topic.name,
+                topic.status,
+                topic.practice_count,
+                topic.notes,
+            ),
+        )
+        created = connection.execute(
+            f"SELECT {PREPARATION_TOPIC_SELECT} FROM preparation_topics WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+        return dict(created)
+
+
+@app.get(
+    "/api/preparation/topics",
+    response_model=list[PreparationTopicResponse],
+)
+def get_preparation_topics(
+    category_id: int | None = None,
+    status: PreparationTopicStatus | None = None,
+):
+    conditions = []
+    parameters = []
+    if category_id is not None:
+        conditions.append("category_id = ?")
+        parameters.append(category_id)
+    if status is not None:
+        conditions.append("status = ?")
+        parameters.append(status)
+
+    query = f"SELECT {PREPARATION_TOPIC_SELECT} FROM preparation_topics"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY category_id, id"
+
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        topics = connection.execute(query, parameters).fetchall()
+        return [dict(topic) for topic in topics]
+
+
+@app.get(
+    "/api/preparation/topics/{topic_id}",
+    response_model=PreparationTopicResponse,
+)
+def get_preparation_topic(topic_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        topic = connection.execute(
+            f"SELECT {PREPARATION_TOPIC_SELECT} FROM preparation_topics WHERE id = ?",
+            (topic_id,),
+        ).fetchone()
+        if topic is None:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        return dict(topic)
+
+
+@app.put(
+    "/api/preparation/topics/{topic_id}",
+    response_model=PreparationTopicResponse,
+)
+def update_preparation_topic(topic_id: int, changes: PreparationTopicUpdate):
+    updates = changes.model_dump(exclude_unset=True)
+    if "notes" in updates and updates["notes"] is None:
+        updates["notes"] = ""
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        if "category_id" in updates:
+            category = connection.execute(
+                "SELECT 1 FROM preparation_categories WHERE id = ?",
+                (updates["category_id"],),
+            ).fetchone()
+            if category is None:
+                raise HTTPException(status_code=404, detail="Category not found")
+
+        if updates:
+            assignments = [f"{field} = ?" for field in updates]
+            assignments.append("updated_at = CURRENT_TIMESTAMP")
+            cursor = connection.execute(
+                "UPDATE preparation_topics SET " + ", ".join(assignments)
+                + " WHERE id = ?",
+                (*updates.values(), topic_id),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Topic not found")
+        else:
+            exists = connection.execute(
+                "SELECT 1 FROM preparation_topics WHERE id = ?", (topic_id,)
+            ).fetchone()
+            if exists is None:
+                raise HTTPException(status_code=404, detail="Topic not found")
+
+        updated = connection.execute(
+            f"SELECT {PREPARATION_TOPIC_SELECT} FROM preparation_topics WHERE id = ?",
+            (topic_id,),
+        ).fetchone()
+        return dict(updated)
+
+
+@app.delete("/api/preparation/topics/{topic_id}", status_code=204)
+def delete_preparation_topic(topic_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        cursor = connection.execute(
+            "DELETE FROM preparation_topics WHERE id = ?", (topic_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Topic not found")
+
+
+@app.post(
+    "/api/preparation/topics/{topic_id}/practice",
+    response_model=PreparationTopicResponse,
+)
+def practice_preparation_topic(topic_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.execute(
+            "UPDATE preparation_topics "
+            "SET practice_count = practice_count + 1, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (topic_id,),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        topic = connection.execute(
+            f"SELECT {PREPARATION_TOPIC_SELECT} FROM preparation_topics WHERE id = ?",
+            (topic_id,),
+        ).fetchone()
+        return dict(topic)
 
 @app.get("/")
 async def root():

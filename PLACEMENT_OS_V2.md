@@ -94,3 +94,39 @@ This keeps the model easy to explain and avoids redundant tables or additional
 layers. Standard-library tests cover migration repeatability and preservation,
 create/read/list/update, inbox promotion, filtering, delete, invalid input,
 missing IDs, and a V1 habit completion/score workflow. All six tests pass.
+## Module 2 — Preparation Tracking
+
+Preparation Tracking records what is being studied and whether the topic is
+being practiced. It complements V1 habits: a habit records daily effort, while a
+topic has a durable status and practice count.
+
+Categories are editable records, seeded with DSA, SQL / DBMS, Python, OOP,
+Aptitude, Machine Learning, Deep Learning, GenAI, Cybersecurity, Projects, and
+Interview Preparation. Topics belong to one category and use `Not Started`,
+`In Progress`, or `Completed`. Each topic stores an independent non-negative
+practice count and optional notes; recording practice increments only the count.
+
+Migration version 3 adds `preparation_categories` and `preparation_topics`.
+Topics reference their category with a restrictive foreign key. A category
+cannot be deleted while it contains topics; move or delete those topics first.
+Default names are inserted with `INSERT OR IGNORE`, so existing categories are
+not overwritten.
+
+### API
+
+- `POST /api/preparation/categories`, `GET /api/preparation/categories`
+- `PUT /api/preparation/categories/{category_id}`
+- `DELETE /api/preparation/categories/{category_id}`
+- `POST /api/preparation/topics`, `GET /api/preparation/topics`
+- `GET /api/preparation/topics/{topic_id}`
+- `PUT /api/preparation/topics/{topic_id}`
+- `DELETE /api/preparation/topics/{topic_id}`
+- `POST /api/preparation/topics/{topic_id}/practice`
+
+Topic lists accept `category_id` and `status` filters. Status and count rules
+are validated in Pydantic and constrained in SQLite. The design uses two simple
+related tables without practice-session records or extra service layers.
+
+Standard-library tests cover default seeding and repeatability, category and
+topic CRUD, filtering, validation, category deletion protection, practice-count
+behavior, missing records, and the existing V1/V2 regression workflows. The full suite passes with 11 tests.

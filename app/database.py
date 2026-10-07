@@ -5,13 +5,14 @@ from typing import Iterator
 
 
 DATABASE_PATH = Path(__file__).resolve().parent.parent / "placement.db"
-LATEST_SCHEMA_VERSION = 2
+LATEST_SCHEMA_VERSION = 3
 
 
 @contextmanager
 def database_connection(path: Path) -> Iterator[sqlite3.Connection]:
     """Open a transaction-scoped SQLite connection and always close it."""
     with closing(sqlite3.connect(path)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             yield connection
 
@@ -110,12 +111,64 @@ def _create_opportunities_table(connection: sqlite3.Connection) -> None:
         )
         """
     )
-MIGRATIONS = ((1, _create_current_tables), (2, _create_opportunities_table))
+def _create_preparation_tables(connection: sqlite3.Connection) -> None:
+    """Create editable preparation categories/topics and seed defaults once."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS preparation_categories (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE CHECK (length(trim(name)) > 0),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS preparation_topics (
+            id INTEGER PRIMARY KEY,
+            category_id INTEGER NOT NULL,
+            name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+            status TEXT NOT NULL DEFAULT 'Not Started'
+                CHECK (status IN ('Not Started', 'In Progress', 'Completed')),
+            practice_count INTEGER NOT NULL DEFAULT 0
+                CHECK (practice_count >= 0),
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (category_id)
+                REFERENCES preparation_categories(id) ON DELETE RESTRICT
+        )
+        """
+    )
+
+    default_categories = (
+        "DSA",
+        "SQL / DBMS",
+        "Python",
+        "OOP",
+        "Aptitude",
+        "Machine Learning",
+        "Deep Learning",
+        "GenAI",
+        "Cybersecurity",
+        "Projects",
+        "Interview Preparation",
+    )
+    connection.executemany(
+        "INSERT OR IGNORE INTO preparation_categories (name) VALUES (?)",
+        ((name,) for name in default_categories),
+    )
+MIGRATIONS = (
+    (1, _create_current_tables),
+    (2, _create_opportunities_table),
+    (3, _create_preparation_tables),
+)
 
 
 def initialize_database() -> None:
     """Apply pending schema migrations atomically and safely on startup."""
     with closing(sqlite3.connect(DATABASE_PATH, timeout=30)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
         current_version = connection.execute("PRAGMA user_version").fetchone()[0]
         if current_version > LATEST_SCHEMA_VERSION:
             raise RuntimeError(
