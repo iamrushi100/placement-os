@@ -1,11 +1,11 @@
-﻿import sqlite3
+import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from app.database import DATABASE_PATH, initialize_database
+from app.database import DATABASE_PATH, database_connection, initialize_database
 from app.schemas import (
     DailyEntryCreate,
     DailyEntryResponse,
@@ -96,7 +96,7 @@ def calculate_placement_streak(scores_by_date: dict[str, int], today: date) -> i
 
 @app.post("/api/habits", response_model=HabitResponse)
 def create_habit(habit: HabitCreate):
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
         cursor = connection.execute(
             "INSERT INTO habits (name, category, description) VALUES (?, ?, ?)",
@@ -112,7 +112,7 @@ def create_habit(habit: HabitCreate):
 
 @app.get("/api/habits", response_model=list[HabitResponse])
 def get_habits():
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
         habits = connection.execute(
             "SELECT id, name, category, description, is_active, created_at "
@@ -124,7 +124,7 @@ def get_habits():
 @app.get("/api/habits/today")
 def get_today_habits():
     today = date.today().isoformat()
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
         habits = connection.execute(
             "SELECT habit.id, habit.name, habit.category, habit.description, "
@@ -151,7 +151,7 @@ def get_today_habits():
 def complete_habit(habit_id: int):
     today = date.today().isoformat()
     try:
-        with sqlite3.connect(DATABASE_PATH) as connection:
+        with database_connection(DATABASE_PATH) as connection:
             connection.row_factory = sqlite3.Row
             habit = connection.execute(
                 "SELECT is_active FROM habits WHERE id = ?", (habit_id,)
@@ -181,7 +181,7 @@ def complete_habit(habit_id: int):
 
 @app.get("/api/habits/{habit_id}/streak")
 def get_habit_streak(habit_id: int):
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         habit = connection.execute(
             "SELECT id FROM habits WHERE id = ?", (habit_id,)
         ).fetchone()
@@ -203,7 +203,7 @@ def get_habit_streak(habit_id: int):
 @app.post("/api/daily-entries", response_model=DailyEntryResponse)
 def create_daily_entry(entry: DailyEntryCreate):
     try:
-        with sqlite3.connect(DATABASE_PATH) as connection:
+        with database_connection(DATABASE_PATH) as connection:
             connection.row_factory = sqlite3.Row
             cursor = connection.execute(
                 "INSERT INTO daily_entries (date, deep_work_minutes) "
@@ -225,7 +225,7 @@ def create_daily_entry(entry: DailyEntryCreate):
 
 @app.get("/api/daily-entries/{date}", response_model=DailyEntryResponse)
 def get_daily_entry(date: date):
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
         entry = connection.execute(
             "SELECT id, date, deep_work_minutes, created_at "
@@ -239,7 +239,7 @@ def get_daily_entry(date: date):
 
 @app.get("/api/daily-score/{date}")
 def get_daily_score(date: date):
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         return calculate_daily_score(connection, date)
 
 
@@ -248,7 +248,7 @@ def get_sprint_history():
     history = []
     current_day = SPRINT_START
 
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         while current_day <= SPRINT_END:
             daily_score = calculate_daily_score(connection, current_day)
             daily_entry = connection.execute(
@@ -289,7 +289,7 @@ def get_analytics():
     current_streak = 0
     best_streak = 0
 
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         active_habits = connection.execute(
             "SELECT COUNT(*) FROM habits WHERE is_active = 1"
         ).fetchone()[0]
@@ -337,7 +337,7 @@ def get_placement_streak():
     last_sprint_day = min(today, SPRINT_END)
 
     if today >= SPRINT_START:
-        with sqlite3.connect(DATABASE_PATH) as connection:
+        with database_connection(DATABASE_PATH) as connection:
             current_day = SPRINT_START
             while current_day <= last_sprint_day:
                 daily_score = calculate_daily_score(connection, current_day)
@@ -357,7 +357,7 @@ def get_placement_streak():
 def create_mit(mit: MITCreate):
     mit_date = mit.date.isoformat()
     try:
-        with sqlite3.connect(DATABASE_PATH) as connection:
+        with database_connection(DATABASE_PATH) as connection:
             connection.row_factory = sqlite3.Row
             duplicate = connection.execute(
                 "SELECT id FROM daily_mits WHERE date = ? AND task = ?",
@@ -398,7 +398,7 @@ def create_mit(mit: MITCreate):
 
 @app.get("/api/mits/{date}", response_model=list[MITResponse])
 def get_mits(date: date):
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
         mits = connection.execute(
             "SELECT id, date, task, completed, created_at "
@@ -411,7 +411,7 @@ def get_mits(date: date):
 def create_reflection(reflection: ReflectionCreate):
     reflection_date = reflection.date.isoformat()
     try:
-        with sqlite3.connect(DATABASE_PATH) as connection:
+        with database_connection(DATABASE_PATH) as connection:
             connection.row_factory = sqlite3.Row
             cursor = connection.execute(
                 "INSERT INTO daily_reflections "
@@ -439,7 +439,7 @@ def create_reflection(reflection: ReflectionCreate):
 
 @app.get("/api/reflections/{date}", response_model=ReflectionResponse)
 def get_reflection(date: date):
-    with sqlite3.connect(DATABASE_PATH) as connection:
+    with database_connection(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
         reflection = connection.execute(
             "SELECT id, date, went_well, challenges, improvement, created_at "
