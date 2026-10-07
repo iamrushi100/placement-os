@@ -5,7 +5,7 @@ from typing import Iterator
 
 
 DATABASE_PATH = Path(__file__).resolve().parent.parent / "placement.db"
-LATEST_SCHEMA_VERSION = 3
+LATEST_SCHEMA_VERSION = 4
 
 
 @contextmanager
@@ -158,10 +158,45 @@ def _create_preparation_tables(connection: sqlite3.Connection) -> None:
         "INSERT OR IGNORE INTO preparation_categories (name) VALUES (?)",
         ((name,) for name in default_categories),
     )
+
+def _create_deep_work_tables(connection: sqlite3.Connection) -> None:
+    """Add completed focus sessions and the single active timer state."""
+    categories = "'DSA', 'SQL', 'Python', 'AI/ML', 'GenAI', 'Cybersecurity', 'Project', 'Interview Preparation', 'Other'"
+    connection.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS deep_work_sessions (
+            id INTEGER PRIMARY KEY,
+            date TEXT NOT NULL,
+            duration_minutes INTEGER NOT NULL CHECK (duration_minutes >= 30),
+            category TEXT NOT NULL CHECK (category IN ({categories})),
+            notes TEXT,
+            started_at TEXT,
+            ended_at TEXT,
+            source TEXT NOT NULL CHECK (source IN ('manual', 'timer')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CHECK (
+                (source = 'manual' AND started_at IS NULL AND ended_at IS NULL)
+                OR (source = 'timer' AND started_at IS NOT NULL AND ended_at IS NOT NULL)
+            )
+        )
+        """
+    )
+    connection.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS deep_work_active_timer (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            category TEXT NOT NULL CHECK (category IN ({categories})),
+            notes TEXT,
+            started_at TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'timer' CHECK (source = 'timer')
+        )
+        """
+    )
 MIGRATIONS = (
     (1, _create_current_tables),
     (2, _create_opportunities_table),
     (3, _create_preparation_tables),
+    (4, _create_deep_work_tables),
 )
 
 

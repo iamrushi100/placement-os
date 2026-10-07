@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -258,3 +258,62 @@ class PreparationTopicResponse(BaseModel):
     notes: str
     created_at: str
     updated_at: str
+DeepWorkCategory = Literal[
+    "DSA",
+    "SQL",
+    "Python",
+    "AI/ML",
+    "GenAI",
+    "Cybersecurity",
+    "Project",
+    "Interview Preparation",
+    "Other",
+]
+DeepWorkSource = Literal["manual", "timer"]
+
+
+class DeepWorkSessionCreate(BaseModel):
+    date: date
+    duration_minutes: int = Field(ge=30)
+    category: DeepWorkCategory
+    notes: str | None = None
+
+
+class DeepWorkSessionResponse(BaseModel):
+    id: int
+    date: date
+    duration_minutes: int
+    category: DeepWorkCategory
+    notes: str | None
+    started_at: str | None
+    ended_at: str | None
+    source: DeepWorkSource
+    created_at: str
+
+
+class DeepWorkTimerStart(BaseModel):
+    category: DeepWorkCategory
+    notes: str | None = None
+
+
+class DeepWorkTimerResponse(BaseModel):
+    id: int
+    category: DeepWorkCategory
+    notes: str | None
+    started_at: str
+    source: Literal["timer"]
+
+
+class DeepWorkTimerStopResponse(BaseModel):
+    completed: bool
+    duration_minutes: int
+    message: str
+    session: DeepWorkSessionResponse | None = None
+
+
+class DailyDeepWorkSummary(BaseModel):
+    date: date
+    total_minutes: int
+    target_minutes: int
+    progress_percentage: float
+    sessions: list[DeepWorkSessionResponse]

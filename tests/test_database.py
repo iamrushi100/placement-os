@@ -33,6 +33,8 @@ EXPECTED_TABLES = {
     "opportunities",
     "preparation_categories",
     "preparation_topics",
+    "deep_work_sessions",
+    "deep_work_active_timer",
 }
 
 

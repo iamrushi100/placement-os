@@ -258,7 +258,8 @@ class PreparationMigrationUpgradeTests(unittest.TestCase):
                         ("Existing Employer", "Software Engineer", "Applied", "High"),
                     )
                     self.assertEqual(
-                        connection.execute("PRAGMA user_version").fetchone()[0], 3
+                        connection.execute("PRAGMA user_version").fetchone()[0],
+                        database.LATEST_SCHEMA_VERSION
                     )
 
 if __name__ == "__main__":

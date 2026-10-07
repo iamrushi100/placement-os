@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -26,6 +26,13 @@ from app.schemas import (
     PreparationTopicResponse,
     PreparationTopicStatus,
     PreparationTopicUpdate,
+    DailyDeepWorkSummary,
+    DeepWorkCategory,
+    DeepWorkSessionCreate,
+    DeepWorkSessionResponse,
+    DeepWorkTimerResponse,
+    DeepWorkTimerStart,
+    DeepWorkTimerStopResponse,
 )
 
 app = FastAPI()
@@ -35,12 +42,35 @@ app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')
 SPRINT_START = date(2026, 10, 6)
 SPRINT_END = date(2026, 11, 5)
 PLACEMENT_THRESHOLD = 60
+DEEP_WORK_TARGET_MINUTES = 180
+MIN_DEEP_WORK_SESSION_MINUTES = 30
 
 
 @app.on_event("startup")
 def startup_event():
     initialize_database()
 
+
+def current_local_datetime() -> datetime:
+    """Return a timezone-aware timestamp in the server's local timezone."""
+    return datetime.now().astimezone()
+
+
+def get_deep_work_minutes(connection: sqlite3.Connection, requested_date: date) -> int:
+    date_string = requested_date.isoformat()
+    session_totals = connection.execute(
+        "SELECT COUNT(*), COALESCE(SUM(duration_minutes), 0) "
+        "FROM deep_work_sessions WHERE date = ?",
+        (date_string,),
+    ).fetchone()
+    if session_totals[0]:
+        return session_totals[1]
+
+    daily_entry = connection.execute(
+        "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
+        (date_string,),
+    ).fetchone()
+    return daily_entry[0] if daily_entry else 0
 
 def calculate_current_streak(completion_dates: list[str], today: date) -> int:
     completed_days = set(completion_dates)
@@ -54,12 +84,7 @@ def calculate_current_streak(completion_dates: list[str], today: date) -> int:
 
 def calculate_daily_score(connection: sqlite3.Connection, requested_date: date) -> dict:
     date_string = requested_date.isoformat()
-    daily_entry = connection.execute(
-        "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
-        (date_string,),
-    ).fetchone()
-    deep_work_minutes = daily_entry[0] if daily_entry else 0
-
+    deep_work_minutes = get_deep_work_minutes(connection, requested_date)
     technical_completed = connection.execute(
         "SELECT COUNT(*) FROM habit_completions AS completion "
         "JOIN habits AS habit ON habit.id = completion.habit_id "
@@ -75,7 +100,7 @@ def calculate_daily_score(connection: sqlite3.Connection, requested_date: date) 
         (date_string,),
     ).fetchone()[0]
 
-    deep_work_points = min(deep_work_minutes / 180, 1) * 40
+    deep_work_points = min(deep_work_minutes / DEEP_WORK_TARGET_MINUTES, 1) * 40
     technical_points = technical_completed / 5 * 30
     placement_points = placement_completed / 5 * 30
     score = int(round(deep_work_points + technical_points + placement_points))
@@ -262,15 +287,11 @@ def get_sprint_history():
     with database_connection(DATABASE_PATH) as connection:
         while current_day <= SPRINT_END:
             daily_score = calculate_daily_score(connection, current_day)
-            daily_entry = connection.execute(
-                "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
-                (current_day.isoformat(),),
-            ).fetchone()
             history.append(
                 {
                     "date": current_day.isoformat(),
                     "score": daily_score["score"],
-                    "deep_work_minutes": daily_entry[0] if daily_entry else 0,
+                    "deep_work_minutes": get_deep_work_minutes(connection, current_day),
                     "technical_completed": daily_score["technical_completed"],
                     "placement_completed": daily_score["placement_completed"],
                     "successful": daily_score["score"] >= PLACEMENT_THRESHOLD,
@@ -315,12 +336,8 @@ def get_analytics():
         current_day = SPRINT_START
         while current_day <= last_day:
             daily_score = calculate_daily_score(connection, current_day)
-            daily_entry = connection.execute(
-                "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
-                (current_day.isoformat(),),
-            ).fetchone()
             total_score += daily_score["score"]
-            total_deep_work_minutes += daily_entry[0] if daily_entry else 0
+            total_deep_work_minutes += get_deep_work_minutes(connection, current_day)
 
             if daily_score["score"] >= PLACEMENT_THRESHOLD:
                 successful_days += 1
@@ -826,6 +843,175 @@ def practice_preparation_topic(topic_id: int):
         ).fetchone()
         return dict(topic)
 
+
+DEEP_WORK_SESSION_SELECT = (
+    "id, date, duration_minutes, category, notes, started_at, ended_at, source, created_at"
+)
+
+
+def _deep_work_session_dict(row: sqlite3.Row) -> dict:
+    return dict(row)
+
+
+@app.post("/api/deep-work/sessions", response_model=DeepWorkSessionResponse, status_code=201)
+def create_deep_work_session(session: DeepWorkSessionCreate):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.execute(
+            "INSERT INTO deep_work_sessions "
+            "(date, duration_minutes, category, notes, source) VALUES (?, ?, ?, ?, 'manual')",
+            (session.date.isoformat(), session.duration_minutes, session.category, session.notes),
+        )
+        created = connection.execute(
+            f"SELECT {DEEP_WORK_SESSION_SELECT} FROM deep_work_sessions WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+        return _deep_work_session_dict(created)
+
+
+@app.get("/api/deep-work/sessions", response_model=list[DeepWorkSessionResponse])
+def get_deep_work_sessions(date: date | None = None, category: DeepWorkCategory | None = None):
+    conditions = []
+    parameters = []
+    if date is not None:
+        conditions.append("date = ?")
+        parameters.append(date.isoformat())
+    if category is not None:
+        conditions.append("category = ?")
+        parameters.append(category)
+    query = f"SELECT {DEEP_WORK_SESSION_SELECT} FROM deep_work_sessions"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY date, id"
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        return [_deep_work_session_dict(row) for row in connection.execute(query, parameters).fetchall()]
+
+
+@app.get("/api/deep-work/sessions/{session_id}", response_model=DeepWorkSessionResponse)
+def get_deep_work_session(session_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        session = connection.execute(
+            f"SELECT {DEEP_WORK_SESSION_SELECT} FROM deep_work_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if session is None:
+            raise HTTPException(status_code=404, detail="Deep work session not found")
+        return _deep_work_session_dict(session)
+
+
+@app.delete("/api/deep-work/sessions/{session_id}", status_code=204)
+def delete_deep_work_session(session_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        cursor = connection.execute("DELETE FROM deep_work_sessions WHERE id = ?", (session_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Deep work session not found")
+
+
+@app.get("/api/deep-work/daily/{requested_date}", response_model=DailyDeepWorkSummary)
+def get_daily_deep_work_summary(requested_date: date):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            f"SELECT {DEEP_WORK_SESSION_SELECT} FROM deep_work_sessions WHERE date = ? ORDER BY id",
+            (requested_date.isoformat(),),
+        ).fetchall()
+    sessions = [_deep_work_session_dict(row) for row in rows]
+    total = sum(session["duration_minutes"] for session in sessions)
+    return {
+        "date": requested_date.isoformat(),
+        "total_minutes": total,
+        "target_minutes": DEEP_WORK_TARGET_MINUTES,
+        "progress_percentage": min(total / DEEP_WORK_TARGET_MINUTES, 1) * 100,
+        "sessions": sessions,
+    }
+
+
+@app.post("/api/deep-work/timer/start", response_model=DeepWorkTimerResponse, status_code=201)
+def start_deep_work_timer(timer: DeepWorkTimerStart):
+    started_at = current_local_datetime().isoformat(timespec="seconds")
+    try:
+        with database_connection(DATABASE_PATH) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute(
+                "INSERT INTO deep_work_active_timer (id, category, notes, started_at) "
+                "VALUES (1, ?, ?, ?)",
+                (timer.category, timer.notes, started_at),
+            )
+            return dict(connection.execute(
+                "SELECT id, category, notes, started_at, source "
+                "FROM deep_work_active_timer WHERE id = 1"
+            ).fetchone())
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="A deep work timer is already active")
+
+
+@app.get("/api/deep-work/timer", response_model=DeepWorkTimerResponse | None)
+def get_deep_work_timer():
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        timer = connection.execute(
+            "SELECT id, category, notes, started_at, source "
+            "FROM deep_work_active_timer WHERE id = 1"
+        ).fetchone()
+        return dict(timer) if timer else None
+
+
+@app.post("/api/deep-work/timer/stop", response_model=DeepWorkTimerStopResponse)
+def stop_deep_work_timer():
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        timer = connection.execute(
+            "SELECT id, category, notes, started_at FROM deep_work_active_timer WHERE id = 1"
+        ).fetchone()
+        if timer is None:
+            raise HTTPException(status_code=409, detail="No deep work timer is active")
+        try:
+            started_at = datetime.fromisoformat(timer["started_at"])
+            if started_at.tzinfo is None:
+                raise ValueError("Timer timestamp has no timezone")
+            elapsed_seconds = current_local_datetime().timestamp() - started_at.timestamp()
+            if elapsed_seconds < 0:
+                raise ValueError("Timer start is in the future")
+        except (TypeError, ValueError):
+            connection.execute("DELETE FROM deep_work_active_timer WHERE id = 1")
+            return {
+                "completed": False,
+                "duration_minutes": 0,
+                "message": "The saved timer timestamp was invalid; the timer was cleared.",
+                "session": None,
+            }
+
+        duration_minutes = int(elapsed_seconds // 60)
+        if duration_minutes < MIN_DEEP_WORK_SESSION_MINUTES:
+            connection.execute("DELETE FROM deep_work_active_timer WHERE id = 1")
+            return {
+                "completed": False,
+                "duration_minutes": duration_minutes,
+                "message": "Session was under 30 minutes and was not saved.",
+                "session": None,
+            }
+
+        ended_at = current_local_datetime().isoformat(timespec="seconds")
+        cursor = connection.execute(
+            "INSERT INTO deep_work_sessions "
+            "(date, duration_minutes, category, notes, started_at, ended_at, source) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'timer')",
+            (started_at.date().isoformat(), duration_minutes, timer["category"], timer["notes"],
+             timer["started_at"], ended_at),
+        )
+        session = connection.execute(
+            f"SELECT {DEEP_WORK_SESSION_SELECT} FROM deep_work_sessions WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+        connection.execute("DELETE FROM deep_work_active_timer WHERE id = 1")
+        return {
+            "completed": True,
+            "duration_minutes": duration_minutes,
+            "message": "Deep work session saved.",
+            "session": _deep_work_session_dict(session),
+        }
 @app.get("/")
 async def root():
     return FileResponse(STATIC_DIR / "index.html")

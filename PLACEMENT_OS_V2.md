@@ -130,3 +130,17 @@ related tables without practice-session records or extra service layers.
 Standard-library tests cover default seeding and repeatability, category and
 topic CRUD, filtering, validation, category deletion protection, practice-count
 behavior, missing records, and the existing V1/V2 regression workflows. The full suite passes with 11 tests.
+## Module 3 — Deep Work
+
+Deep Work tracks completed focus sessions independently of the V1 daily-entry record. A manual session stores a date, duration of at least 30 minutes, one of the supported focus categories, and optional notes. Timer sessions use the same record shape and preserve their start/end timestamps. Only one timer can be active; elapsed time is calculated when it is stopped, and sessions shorter than 30 minutes are discarded.
+
+Migration version 4 adds `deep_work_sessions` and the singleton `deep_work_active_timer` table. The daily summary reports the sum of V2 sessions against a 180-minute target. To preserve older V1 data without double-counting, score, history, and analytics calculations use the V2 session total when sessions exist for a date and otherwise fall back to that date's legacy `daily_entries` value. The score formula and 180-minute cap are unchanged.
+
+### API
+
+- `POST /api/deep-work/sessions`, `GET /api/deep-work/sessions?date=YYYY-MM-DD&category=DSA`
+- `GET /api/deep-work/sessions/{session_id}`, `DELETE /api/deep-work/sessions/{session_id}`
+- `GET /api/deep-work/daily/{date}`
+- `POST /api/deep-work/timer/start`, `GET /api/deep-work/timer`, `POST /api/deep-work/timer/stop`
+
+Standard-library tests cover migration repeatability and table presence, manual session validation and CRUD, filtering and daily totals, timer exclusivity and short/completed stops, and V1 score fallback behavior.
