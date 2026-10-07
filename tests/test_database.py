@@ -35,6 +35,7 @@ EXPECTED_TABLES = {
     "preparation_topics",
     "deep_work_sessions",
     "deep_work_active_timer",
+    "app_settings",
 }
 
 

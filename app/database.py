@@ -5,7 +5,7 @@ from typing import Iterator
 
 
 DATABASE_PATH = Path(__file__).resolve().parent.parent / "placement.db"
-LATEST_SCHEMA_VERSION = 4
+LATEST_SCHEMA_VERSION = 5
 
 
 @contextmanager
@@ -192,11 +192,30 @@ def _create_deep_work_tables(connection: sqlite3.Connection) -> None:
         )
         """
     )
+
+def _create_dashboard_settings_table(connection: sqlite3.Connection) -> None:
+    """Store the two user-configurable values shown on the dashboard."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+    connection.executemany(
+        "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)",
+        (
+            ("placement_goal", "Get placed in a good software / AI role"),
+            ("daily_deep_work_target_minutes", "180"),
+        ),
+    )
 MIGRATIONS = (
     (1, _create_current_tables),
     (2, _create_opportunities_table),
     (3, _create_preparation_tables),
     (4, _create_deep_work_tables),
+    (5, _create_dashboard_settings_table),
 )
 
 

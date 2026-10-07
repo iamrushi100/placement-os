@@ -144,3 +144,29 @@ Migration version 4 adds `deep_work_sessions` and the singleton `deep_work_activ
 - `POST /api/deep-work/timer/start`, `GET /api/deep-work/timer`, `POST /api/deep-work/timer/stop`
 
 Standard-library tests cover migration repeatability and table presence, manual session validation and CRUD, filtering and daily totals, timer exclusivity and short/completed stops, and V1 score fallback behavior.
+
+## Module 4 — Placement Dashboard
+
+The Placement Dashboard is a read and aggregation view that answers where placement preparation stands. It reuses the existing V1 and V2 records and does not create a second application, topic, session, or daily-priority tracker. The only editable dashboard values are the placement goal and display-only daily Deep Work target.
+
+### Data and metrics
+
+The dashboard reads serious opportunities for the active application count and status pipeline. Active statuses are Interested, Applied, Assessment, Interview, and HR; Selected, Rejected, Withdrawn, Not Eligible, and Expired do not count as active. The pipeline shows counts for serious opportunities by status. The next deadline is the earliest future deadline across non-terminal opportunities.
+
+Preparation totals, status counts, completion percentage, practice count, and per-category completion percentages come from `preparation_categories` and `preparation_topics`. Daily and weekly Deep Work actuals are sums of `deep_work_sessions`; the week is Monday through today. The weekly target is the configured daily display target multiplied by seven. Today's Focus reads the existing MIT records and incomplete preparation topics.
+
+The daily display target defaults to 180 minutes and can be configured from the dashboard. It is not the scoring target: V1 daily scoring still uses its fixed 180-minute cap regardless of the dashboard setting. The default placement goal is “Get placed in a good software / AI role.”
+
+### Settings and API
+
+Migration version 5 adds only `app_settings`, a key/value table containing the placement goal and daily display target. Dashboard metrics are calculated dynamically; no summaries, snapshots, weekly records, or cached values are stored.
+
+- `GET /api/dashboard` returns goal, application count and pipeline, next deadline, preparation totals and category progress, daily and weekly Deep Work target/actual/progress, today's MITs, and incomplete topics.
+- `GET /api/dashboard/settings` returns the two settings.
+- `PUT /api/dashboard/settings` updates either or both settings.
+
+The frontend extends the existing page with compact summary cards, pipeline/deadline, preparation progress, Deep Work target versus actual, and Today's Focus. Settings forms update only the goal or display target. Navigation links jump to dashboard sections; module data remains managed through its existing APIs. Everything uses the existing FastAPI, SQLite, HTML, CSS, and vanilla JavaScript stack.
+
+### Testing and design decisions
+
+Standard-library tests cover setting defaults and updates, active versus terminal applications, pipeline counts and deadline selection, empty and populated preparation progress, daily and weekly Deep Work calculations, target/scoring separation, MIT/topic focus, and response validation. This keeps the dashboard explainable as a dynamic view over source records rather than a new tracking subsystem.

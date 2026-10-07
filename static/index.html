@@ -1,19 +1,19 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f6f2">
-  <title>Placement Streak Tracker</title>
+  <title>Placement OS</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <div class="page-shell">
     <header class="topbar">
-      <a class="brand" href="#top" aria-label="Placement Streak Tracker home">
+      <a class="brand" href="#top" aria-label="Placement OS home">
         <span class="brand-mark" aria-hidden="true">P</span>
-        <span class="brand-name">Placement Streak Tracker</span>
+        <span class="brand-name">Placement OS</span>
       </a>
       <div class="sprint-label">
         <span class="sprint-dot" aria-hidden="true"></span>
@@ -32,6 +32,92 @@
           <span class="day-label">SPRINT PROGRESS</span>
           <strong id="sprint-day-value">Day 1 / 31</strong>
         </div>
+      </section>
+
+
+      <section class="placement-dashboard" aria-labelledby="placement-dashboard-title">
+        <div class="panel goal-panel">
+          <div class="goal-copy">
+            <p class="eyebrow">PLACEMENT GOAL</p>
+            <h2 id="placement-dashboard-title">Your direction</h2>
+            <p class="dashboard-goal-value" id="dashboard-goal-value">Loading goal…</p>
+          </div>
+          <form class="dashboard-setting-form" id="dashboard-goal-form">
+            <label for="dashboard-goal-input">Update goal</label>
+            <div class="dashboard-setting-row">
+              <input class="task-input" id="dashboard-goal-input" type="text" maxlength="200" required>
+              <button type="submit">Save</button>
+            </div>
+            <p class="dashboard-message" id="dashboard-goal-message" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+
+        <div class="dashboard-metric-grid">
+          <a class="panel dashboard-metric-card" href="#dashboard-pipeline">
+            <span class="eyebrow">SERIOUS APPLICATIONS</span>
+            <strong class="dashboard-metric-value" id="dashboard-active-applications">—</strong>
+            <span class="dashboard-card-link">View pipeline ↓</span>
+          </a>
+          <a class="panel dashboard-metric-card" href="#dashboard-preparation">
+            <span class="eyebrow">PREPARATION</span>
+            <strong class="dashboard-metric-value" id="dashboard-preparation-percent">—</strong>
+            <span class="dashboard-metric-caption" id="dashboard-preparation-count">Loading topics…</span>
+            <span class="dashboard-card-link">View progress ↓</span>
+          </a>
+          <a class="panel dashboard-metric-card" href="#dashboard-deep-work">
+            <span class="eyebrow">TODAY'S DEEP WORK</span>
+            <strong class="dashboard-metric-value" id="dashboard-deep-work-percent">—</strong>
+            <span class="dashboard-metric-caption" id="dashboard-deep-work-actual">Loading sessions…</span>
+            <span class="dashboard-card-link">View target ↓</span>
+          </a>
+        </div>
+
+        <div class="dashboard-split-grid">
+          <section class="panel dashboard-panel" id="dashboard-pipeline" aria-labelledby="dashboard-pipeline-title">
+            <div class="panel-heading"><div><p class="eyebrow">SERIOUS APPLICATIONS</p><h2 id="dashboard-pipeline-title">Placement pipeline</h2></div></div>
+            <div class="pipeline-list" id="dashboard-pipeline-list"><p class="panel-description">Loading pipeline…</p></div>
+          </section>
+          <section class="panel dashboard-panel deadline-panel" aria-labelledby="dashboard-deadline-title">
+            <div><p class="eyebrow">UP NEXT</p><h2 id="dashboard-deadline-title">Next deadline</h2></div>
+            <div id="dashboard-next-deadline" class="deadline-content"><p class="panel-description">Loading deadline…</p></div>
+          </section>
+        </div>
+
+        <div class="dashboard-split-grid">
+          <section class="panel dashboard-panel" id="dashboard-preparation" aria-labelledby="dashboard-preparation-title">
+            <div class="panel-heading"><div><p class="eyebrow">TOPIC PROGRESS</p><h2 id="dashboard-preparation-title">Preparation</h2></div><span class="count-pill" id="dashboard-practice-count">0 practice sessions</span></div>
+            <p class="dashboard-summary-line" id="dashboard-preparation-summary">Loading preparation…</p>
+            <div class="category-progress-list" id="dashboard-category-progress"></div>
+          </section>
+          <section class="panel dashboard-panel" id="dashboard-deep-work" aria-labelledby="dashboard-deep-work-title">
+            <div class="panel-heading"><div><p class="eyebrow">TARGET VS ACTUAL</p><h2 id="dashboard-deep-work-title">Deep Work</h2></div></div>
+            <div class="deep-work-period">
+              <div class="deep-work-period-heading"><strong>Today</strong><span id="dashboard-deep-work-daily-text">—</span></div>
+              <div class="dashboard-progress-track"><span id="dashboard-deep-work-daily-bar"></span></div>
+              <p id="dashboard-deep-work-daily-progress" class="panel-description">— progress</p>
+            </div>
+            <div class="deep-work-period">
+              <div class="deep-work-period-heading"><strong>This week</strong><span id="dashboard-deep-work-weekly-text">—</span></div>
+              <div class="dashboard-progress-track"><span id="dashboard-deep-work-weekly-bar"></span></div>
+              <p id="dashboard-deep-work-weekly-progress" class="panel-description">— progress · Monday to today</p>
+            </div>
+            <form class="dashboard-setting-form target-setting-form" id="dashboard-target-form">
+              <label for="dashboard-target-input">Daily display target (minutes)</label>
+              <div class="dashboard-setting-row target-input-row"><input class="task-input" id="dashboard-target-input" type="number" min="1" max="1440" step="1" required><button type="submit">Save target</button></div>
+              <p class="dashboard-message" id="dashboard-target-message" role="status" aria-live="polite"></p>
+            </form>
+            <p class="dashboard-footnote">Display target only. Daily score continues to use its fixed 180-minute target.</p>
+          </section>
+        </div>
+
+        <section class="panel dashboard-panel" aria-labelledby="dashboard-focus-title">
+          <div class="panel-heading"><div><p class="eyebrow">REUSE TODAY'S PLANS</p><h2 id="dashboard-focus-title">Today's Focus</h2></div></div>
+          <div class="focus-grid">
+            <div><h3>Today's MITs</h3><div class="focus-list" id="dashboard-mits-list"><p class="panel-description">Loading MITs…</p></div></div>
+            <div><h3>Incomplete preparation topics</h3><div class="focus-list" id="dashboard-incomplete-topics"><p class="panel-description">Loading topics…</p></div></div>
+          </div>
+        </section>
+        <p class="dashboard-message dashboard-load-message" id="dashboard-load-message" role="status" aria-live="polite" hidden></p>
       </section>
 
       <section class="summary-grid" aria-label="Today's summary">

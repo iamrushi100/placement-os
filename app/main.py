@@ -33,6 +33,9 @@ from app.schemas import (
     DeepWorkTimerResponse,
     DeepWorkTimerStart,
     DeepWorkTimerStopResponse,
+    DashboardResponse,
+    DashboardSettingsResponse,
+    DashboardSettingsUpdate,
 )
 
 app = FastAPI()
@@ -44,6 +47,17 @@ SPRINT_END = date(2026, 11, 5)
 PLACEMENT_THRESHOLD = 60
 DEEP_WORK_TARGET_MINUTES = 180
 MIN_DEEP_WORK_SESSION_MINUTES = 30
+DEFAULT_PLACEMENT_GOAL = "Get placed in a good software / AI role"
+DASHBOARD_SETTING_DEFAULTS = {
+    "placement_goal": DEFAULT_PLACEMENT_GOAL,
+    "daily_deep_work_target_minutes": str(DEEP_WORK_TARGET_MINUTES),
+}
+PLACEMENT_PIPELINE_STATUSES = (
+    "Interested", "Applied", "Assessment", "Interview", "HR",
+    "Selected", "Rejected", "Withdrawn", "Not Eligible", "Expired",
+)
+ACTIVE_APPLICATION_STATUSES = ("Interested", "Applied", "Assessment", "Interview", "HR")
+
 
 
 @app.on_event("startup")
@@ -1012,6 +1026,157 @@ def stop_deep_work_timer():
             "message": "Deep work session saved.",
             "session": _deep_work_session_dict(session),
         }
+
+
+def read_dashboard_settings(connection: sqlite3.Connection) -> dict:
+    settings = dict(connection.execute(
+        "SELECT key, value FROM app_settings "
+        "WHERE key IN ('placement_goal', 'daily_deep_work_target_minutes')"
+    ).fetchall())
+    goal = settings.get("placement_goal", DASHBOARD_SETTING_DEFAULTS["placement_goal"])
+    try:
+        target_minutes = int(settings.get("daily_deep_work_target_minutes", DASHBOARD_SETTING_DEFAULTS["daily_deep_work_target_minutes"]))
+    except (TypeError, ValueError):
+        target_minutes = DEEP_WORK_TARGET_MINUTES
+    return {
+        "goal": goal,
+        "daily_deep_work_target_minutes": target_minutes,
+    }
+
+
+@app.get("/api/dashboard/settings", response_model=DashboardSettingsResponse)
+def get_dashboard_settings():
+    with database_connection(DATABASE_PATH) as connection:
+        return read_dashboard_settings(connection)
+
+
+@app.put("/api/dashboard/settings", response_model=DashboardSettingsResponse)
+def update_dashboard_settings(changes: DashboardSettingsUpdate):
+    updates = changes.model_dump(exclude_unset=True)
+    with database_connection(DATABASE_PATH) as connection:
+        for key, value in updates.items():
+            stored_key = "placement_goal" if key == "goal" else key
+            connection.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (stored_key, str(value)),
+            )
+        return read_dashboard_settings(connection)
+
+
+@app.get("/api/dashboard", response_model=DashboardResponse)
+def get_dashboard():
+    today = date.today()
+    today_text = today.isoformat()
+    week_start = today - timedelta(days=today.weekday())
+    active_status_placeholders = ", ".join("?" for _ in ACTIVE_APPLICATION_STATUSES)
+    pipeline_counts = {status: 0 for status in PLACEMENT_PIPELINE_STATUSES}
+
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        settings = read_dashboard_settings(connection)
+        active_applications = connection.execute(
+            "SELECT COUNT(*) FROM opportunities WHERE is_serious = 1 "
+            f"AND status IN ({active_status_placeholders})",
+            ACTIVE_APPLICATION_STATUSES,
+        ).fetchone()[0]
+        for row in connection.execute(
+            "SELECT status, COUNT(*) AS total FROM opportunities "
+            "WHERE is_serious = 1 GROUP BY status"
+        ).fetchall():
+            pipeline_counts[row["status"]] = row["total"]
+
+        deadline = connection.execute(
+            "SELECT id, company, role, deadline FROM opportunities "
+            f"WHERE deadline IS NOT NULL AND deadline >= ? AND status IN ({active_status_placeholders}) "
+            "ORDER BY deadline, id LIMIT 1",
+            (today_text, *ACTIVE_APPLICATION_STATUSES),
+        ).fetchone()
+
+        topic_totals = connection.execute(
+            "SELECT COUNT(*) AS total, "
+            "SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed, "
+            "SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress, "
+            "SUM(CASE WHEN status = 'Not Started' THEN 1 ELSE 0 END) AS not_started, "
+            "COALESCE(SUM(practice_count), 0) AS practice_count "
+            "FROM preparation_topics"
+        ).fetchone()
+        category_rows = connection.execute(
+            "SELECT category.id, category.name, COUNT(topic.id) AS total_topics, "
+            "SUM(CASE WHEN topic.status = 'Completed' THEN 1 ELSE 0 END) AS completed_topics "
+            "FROM preparation_categories AS category "
+            "LEFT JOIN preparation_topics AS topic ON topic.category_id = category.id "
+            "GROUP BY category.id, category.name ORDER BY category.name"
+        ).fetchall()
+        categories = [
+            {
+                "category_id": row["id"],
+                "category": row["name"],
+                "total_topics": row["total_topics"],
+                "completed_topics": row["completed_topics"] or 0,
+                "completion_percentage": round(
+                    (row["completed_topics"] or 0) / row["total_topics"] * 100, 1
+                ) if row["total_topics"] else 0,
+            }
+            for row in category_rows
+        ]
+        total_topics = topic_totals["total"] or 0
+        completed_topics = topic_totals["completed"] or 0
+        preparation = {
+            "total_topics": total_topics,
+            "completed": completed_topics,
+            "in_progress": topic_totals["in_progress"] or 0,
+            "not_started": topic_totals["not_started"] or 0,
+            "completion_percentage": round(completed_topics / total_topics * 100, 1) if total_topics else 0,
+            "total_practice_count": topic_totals["practice_count"],
+            "categories": categories,
+        }
+
+        target_minutes = settings["daily_deep_work_target_minutes"]
+        daily_actual = connection.execute(
+            "SELECT COALESCE(SUM(duration_minutes), 0) FROM deep_work_sessions WHERE date = ?",
+            (today_text,),
+        ).fetchone()[0]
+        weekly_actual = connection.execute(
+            "SELECT COALESCE(SUM(duration_minutes), 0) FROM deep_work_sessions "
+            "WHERE date BETWEEN ? AND ?",
+            (week_start.isoformat(), today_text),
+        ).fetchone()[0]
+        deep_work = {
+            "daily": {
+                "target_minutes": target_minutes,
+                "actual_minutes": daily_actual,
+                "progress_percentage": round(daily_actual / target_minutes * 100, 1),
+            },
+            "weekly": {
+                "target_minutes": target_minutes * 7,
+                "actual_minutes": weekly_actual,
+                "progress_percentage": round(weekly_actual / (target_minutes * 7) * 100, 1),
+            },
+        }
+
+        mits = [dict(row) for row in connection.execute(
+            "SELECT id, date, task, completed, created_at FROM daily_mits "
+            "WHERE date = ? ORDER BY id",
+            (today_text,),
+        ).fetchall()]
+        incomplete_topics = [dict(row) for row in connection.execute(
+            "SELECT topic.id, topic.category_id, category.name AS category, topic.name, "
+            "topic.status, topic.practice_count, topic.notes "
+            "FROM preparation_topics AS topic "
+            "JOIN preparation_categories AS category ON category.id = topic.category_id "
+            "WHERE topic.status != 'Completed' ORDER BY category.name, topic.name"
+        ).fetchall()]
+
+    return {
+        "goal": settings["goal"],
+        "applications": {"active": active_applications, "pipeline": pipeline_counts},
+        "next_deadline": dict(deadline) if deadline else None,
+        "preparation": preparation,
+        "deep_work": deep_work,
+        "today": {"mits": mits, "incomplete_topics": incomplete_topics},
+    }
+
 @app.get("/")
 async def root():
     return FileResponse(STATIC_DIR / "index.html")

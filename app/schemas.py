@@ -317,3 +317,96 @@ class DailyDeepWorkSummary(BaseModel):
     target_minutes: int
     progress_percentage: float
     sessions: list[DeepWorkSessionResponse]
+
+class DashboardSettingsResponse(BaseModel):
+    goal: str
+    daily_deep_work_target_minutes: int
+
+
+class DashboardSettingsUpdate(BaseModel):
+    goal: str | None = Field(default=None, max_length=200)
+    daily_deep_work_target_minutes: int | None = Field(default=None, ge=1, le=1440)
+
+    @field_validator("goal")
+    @classmethod
+    def goal_must_not_be_empty(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        goal = value.strip()
+        if not goal:
+            raise ValueError("Goal must not be empty")
+        return goal
+
+    @model_validator(mode="after")
+    def at_least_one_setting_must_be_supplied(self):
+        if not self.model_fields_set:
+            raise ValueError("Supply a goal or daily deep-work target")
+        for field_name in self.model_fields_set:
+            if getattr(self, field_name) is None:
+                raise ValueError(f"{field_name} cannot be null")
+        return self
+
+
+class DashboardApplicationsSummary(BaseModel):
+    active: int
+    pipeline: dict[str, int]
+
+
+class DashboardNextDeadline(BaseModel):
+    opportunity_id: int
+    company: str
+    role: str
+    deadline: date
+
+
+class DashboardCategoryProgress(BaseModel):
+    category_id: int
+    category: str
+    total_topics: int
+    completed_topics: int
+    completion_percentage: float
+
+
+class DashboardPreparationSummary(BaseModel):
+    total_topics: int
+    completed: int
+    in_progress: int
+    not_started: int
+    completion_percentage: float
+    total_practice_count: int
+    categories: list[DashboardCategoryProgress]
+
+
+class DashboardDeepWorkPeriod(BaseModel):
+    target_minutes: int
+    actual_minutes: int
+    progress_percentage: float
+
+
+class DashboardDeepWorkSummary(BaseModel):
+    daily: DashboardDeepWorkPeriod
+    weekly: DashboardDeepWorkPeriod
+
+
+class DashboardFocusTopic(BaseModel):
+    id: int
+    category_id: int
+    category: str
+    name: str
+    status: PreparationTopicStatus
+    practice_count: int
+    notes: str
+
+
+class DashboardTodayFocus(BaseModel):
+    mits: list[MITResponse]
+    incomplete_topics: list[DashboardFocusTopic]
+
+
+class DashboardResponse(BaseModel):
+    goal: str
+    applications: DashboardApplicationsSummary
+    next_deadline: DashboardNextDeadline | None
+    preparation: DashboardPreparationSummary
+    deep_work: DashboardDeepWorkSummary
+    today: DashboardTodayFocus

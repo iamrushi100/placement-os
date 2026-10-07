@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 function getLocalDateString() {
   const today = new Date();
@@ -575,8 +575,190 @@ async function loadDashboard() {
   }
 }
 
+
+function formatMinutes(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours && remainder) return `${hours}h ${remainder}m`;
+  if (hours) return `${hours}h`;
+  return `${remainder}m`;
+}
+
+function createTextElement(tagName, className, text) {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  element.textContent = String(text);
+  return element;
+}
+
+function renderDashboardList(containerId, entries, emptyMessage, renderEntry) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.replaceChildren();
+  if (!entries.length) {
+    container.append(createTextElement("p", "panel-description", emptyMessage));
+    return;
+  }
+  entries.forEach((entry) => container.append(renderEntry(entry)));
+}
+
+function renderPlacementDashboard(data) {
+  const goal = document.getElementById("dashboard-goal-value");
+  const goalInput = document.getElementById("dashboard-goal-input");
+  const targetInput = document.getElementById("dashboard-target-input");
+  if (goal) goal.textContent = data.goal;
+  if (goalInput && document.activeElement !== goalInput) goalInput.value = data.goal;
+  if (targetInput && document.activeElement !== targetInput) {
+    targetInput.value = String(data.deep_work.daily.target_minutes);
+  }
+
+  const active = document.getElementById("dashboard-active-applications");
+  if (active) active.textContent = String(data.applications.active);
+  const prepPercent = document.getElementById("dashboard-preparation-percent");
+  if (prepPercent) prepPercent.textContent = `${data.preparation.completion_percentage}%`;
+  const prepCount = document.getElementById("dashboard-preparation-count");
+  if (prepCount) prepCount.textContent = `${data.preparation.completed}/${data.preparation.total_topics} topics completed`;
+
+  const daily = data.deep_work.daily;
+  const deepPercent = document.getElementById("dashboard-deep-work-percent");
+  if (deepPercent) deepPercent.textContent = `${daily.progress_percentage}%`;
+  const deepActual = document.getElementById("dashboard-deep-work-actual");
+  if (deepActual) deepActual.textContent = `${formatMinutes(daily.actual_minutes)} of ${formatMinutes(daily.target_minutes)}`;
+  const dailyText = document.getElementById("dashboard-deep-work-daily-text");
+  if (dailyText) dailyText.textContent = `${formatMinutes(daily.actual_minutes)} / ${formatMinutes(daily.target_minutes)}`;
+  const dailyProgress = document.getElementById("dashboard-deep-work-daily-progress");
+  if (dailyProgress) dailyProgress.textContent = `${daily.progress_percentage}% progress`;
+  const dailyBar = document.getElementById("dashboard-deep-work-daily-bar");
+  if (dailyBar) dailyBar.style.width = `${Math.min(daily.progress_percentage, 100)}%`;
+
+  const weekly = data.deep_work.weekly;
+  const weeklyText = document.getElementById("dashboard-deep-work-weekly-text");
+  if (weeklyText) weeklyText.textContent = `${formatMinutes(weekly.actual_minutes)} / ${formatMinutes(weekly.target_minutes)}`;
+  const weeklyProgress = document.getElementById("dashboard-deep-work-weekly-progress");
+  if (weeklyProgress) weeklyProgress.textContent = `${weekly.progress_percentage}% progress · Monday to today`;
+  const weeklyBar = document.getElementById("dashboard-deep-work-weekly-bar");
+  if (weeklyBar) weeklyBar.style.width = `${Math.min(weekly.progress_percentage, 100)}%`;
+
+  const pipelineList = document.getElementById("dashboard-pipeline-list");
+  if (pipelineList) {
+    pipelineList.replaceChildren();
+    Object.entries(data.applications.pipeline).forEach(([status, count]) => {
+      const item = document.createElement("div");
+      item.className = "pipeline-item";
+      item.append(createTextElement("span", "", status), createTextElement("strong", "", count));
+      pipelineList.append(item);
+    });
+  }
+
+  const deadlineContainer = document.getElementById("dashboard-next-deadline");
+  if (deadlineContainer) {
+    deadlineContainer.replaceChildren();
+    if (data.next_deadline) {
+      deadlineContainer.append(
+        createTextElement("p", "deadline-company", data.next_deadline.company),
+        createTextElement("p", "deadline-role", data.next_deadline.role),
+        createTextElement("span", "deadline-date", data.next_deadline.deadline)
+      );
+    } else {
+      deadlineContainer.append(createTextElement("p", "panel-description", "No upcoming deadlines."));
+    }
+  }
+
+  const prep = data.preparation;
+  const prepSummary = document.getElementById("dashboard-preparation-summary");
+  if (prepSummary) {
+    prepSummary.textContent = `${prep.completed} completed · ${prep.in_progress} in progress · ${prep.not_started} not started`;
+  }
+  const practiceCount = document.getElementById("dashboard-practice-count");
+  if (practiceCount) practiceCount.textContent = `${prep.total_practice_count} practices`;
+  const categoryList = document.getElementById("dashboard-category-progress");
+  if (categoryList) {
+    categoryList.replaceChildren();
+    prep.categories.forEach((category) => {
+      const row = document.createElement("div");
+      row.className = "category-progress-row";
+      row.append(createTextElement("span", "", category.category));
+      const track = document.createElement("div");
+      track.className = "category-progress-track";
+      const bar = document.createElement("span");
+      bar.style.width = `${Math.min(category.completion_percentage, 100)}%`;
+      track.append(bar);
+      row.append(track, createTextElement("strong", "", `${category.completion_percentage}%`));
+      categoryList.append(row);
+    });
+  }
+
+  renderDashboardList("dashboard-mits-list", data.today.mits, "No MITs added for today.", (mit) => {
+    const row = createTextElement("div", "focus-row", mit.task);
+    if (mit.completed) row.append(createTextElement("small", "", "Completed"));
+    return row;
+  });
+  renderDashboardList("dashboard-incomplete-topics", data.today.incomplete_topics, "No incomplete preparation topics.", (topic) => {
+    const row = createTextElement("div", "focus-row", topic.name);
+    row.append(createTextElement("small", "", `${topic.category} · ${topic.status}`));
+    return row;
+  });
+}
+
+async function loadPlacementDashboard() {
+  const message = document.getElementById("dashboard-load-message");
+  try {
+    const data = await getJson("/api/dashboard");
+    renderPlacementDashboard(data);
+    if (message) {
+      message.hidden = true;
+      message.textContent = "";
+    }
+    return data;
+  } catch {
+    if (message) {
+      message.hidden = false;
+      message.textContent = "Placement dashboard data couldn't be loaded. Try refreshing the page.";
+    }
+    return null;
+  }
+}
+
+async function saveDashboardSetting(payload, messageId) {
+  const message = document.getElementById(messageId);
+  if (message) message.textContent = "";
+  try {
+    const response = await fetch("/api/dashboard/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error("Couldn't save this dashboard setting.");
+    await loadPlacementDashboard();
+    if (message) message.textContent = "Setting saved.";
+  } catch (error) {
+    if (message) message.textContent = error.message;
+  }
+}
+
+function handleDashboardGoalSubmit(event) {
+  event.preventDefault();
+  const input = document.getElementById("dashboard-goal-input");
+  if (input && input.value.trim()) {
+    void saveDashboardSetting({ goal: input.value.trim() }, "dashboard-goal-message");
+  }
+}
+
+function handleDashboardTargetSubmit(event) {
+  event.preventDefault();
+  const input = document.getElementById("dashboard-target-input");
+  if (!input || !input.reportValidity()) return;
+  void saveDashboardSetting(
+    { daily_deep_work_target_minutes: Number(input.value) },
+    "dashboard-target-message"
+  );
+}
+
 document.getElementById("mit-form")?.addEventListener("submit", handleMitSubmit);
 document.getElementById("reflection-form")?.addEventListener("submit", handleReflectionSubmit);
+document.getElementById("dashboard-goal-form")?.addEventListener("submit", handleDashboardGoalSubmit);
+document.getElementById("dashboard-target-form")?.addEventListener("submit", handleDashboardTargetSubmit);
+void loadPlacementDashboard();
 
 loadDashboard().catch(() => {
   const habitList = document.getElementById("habit-list");
