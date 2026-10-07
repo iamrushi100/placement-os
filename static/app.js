@@ -306,10 +306,71 @@ async function handleReflectionSubmit(event) {
     button.disabled = false;
   }
 }
+function renderSprintHistory(records) {
+  const tableBody = document.getElementById("sprint-history-body");
+  if (!tableBody) return;
+
+  const today = getLocalDateString();
+  tableBody.replaceChildren();
+  records.forEach((record) => {
+    const row = document.createElement("tr");
+    const isToday = record.date === today;
+    const isUpcoming = record.date > today;
+    if (isToday) row.className = "today-row";
+
+    const values = [
+      record.date,
+      `${record.score}/100`,
+      `${record.deep_work_minutes} min`,
+      `${record.technical_completed}/5`,
+      `${record.placement_completed}/5`
+    ];
+    values.forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = String(value);
+      row.append(cell);
+    });
+
+    const statusCell = document.createElement("td");
+    const status = document.createElement("span");
+    if (isUpcoming) {
+      status.className = "history-status upcoming";
+      status.textContent = "Upcoming";
+    } else if (Number(record.score) >= 60) {
+      status.className = "history-status successful";
+      status.textContent = "Successful";
+    } else {
+      status.className = "history-status needs-work";
+      status.textContent = "Needs Work";
+    }
+    statusCell.append(status);
+    row.append(statusCell);
+    tableBody.append(row);
+  });
+}
+
+async function loadSprintHistory() {
+  const tableBody = document.getElementById("sprint-history-body");
+  try {
+    const records = await getJson("/api/sprint-history");
+    if (!Array.isArray(records)) throw new Error("Invalid sprint history response");
+    renderSprintHistory(records);
+  } catch {
+    if (tableBody) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 6;
+      cell.textContent = "Sprint history couldn't be loaded.";
+      row.append(cell);
+      tableBody.replaceChildren(row);
+    }
+  }
+}
 async function loadDashboard() {
   const today = getLocalDateString();
   void loadMits(today);
   void loadReflection(today);
+  void loadSprintHistory();
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
     getJson(`/api/daily-score/${today}`),

@@ -243,6 +243,32 @@ def get_daily_score(date: date):
         return calculate_daily_score(connection, date)
 
 
+@app.get("/api/sprint-history")
+def get_sprint_history():
+    history = []
+    current_day = SPRINT_START
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        while current_day <= SPRINT_END:
+            daily_score = calculate_daily_score(connection, current_day)
+            daily_entry = connection.execute(
+                "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
+                (current_day.isoformat(),),
+            ).fetchone()
+            history.append(
+                {
+                    "date": current_day.isoformat(),
+                    "score": daily_score["score"],
+                    "deep_work_minutes": daily_entry[0] if daily_entry else 0,
+                    "technical_completed": daily_score["technical_completed"],
+                    "placement_completed": daily_score["placement_completed"],
+                    "successful": daily_score["score"] >= PLACEMENT_THRESHOLD,
+                }
+            )
+            current_day += timedelta(days=1)
+
+    return history
+
 @app.get("/api/placement-streak")
 def get_placement_streak():
     today = date.today()
