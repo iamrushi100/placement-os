@@ -5,7 +5,7 @@ from typing import Iterator
 
 
 DATABASE_PATH = Path(__file__).resolve().parent.parent / "placement.db"
-LATEST_SCHEMA_VERSION = 5
+LATEST_SCHEMA_VERSION = 6
 
 
 @contextmanager
@@ -210,12 +210,57 @@ def _create_dashboard_settings_table(connection: sqlite3.Connection) -> None:
             ("daily_deep_work_target_minutes", "180"),
         ),
     )
+
+
+def _create_performance_entries_table(connection: sqlite3.Connection) -> None:
+    """Store assessment and interview reflections with optional source links."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS performance_entries (
+            id INTEGER PRIMARY KEY,
+            company TEXT,
+            role TEXT,
+            date TEXT NOT NULL,
+            type TEXT NOT NULL CHECK (type IN (
+                'Assessment', 'Coding Test', 'Technical Interview',
+                'HR Interview', 'Mock Interview'
+            )),
+            performance TEXT NOT NULL CHECK (performance IN ('Good', 'Mixed', 'Poor')),
+            opportunity_id INTEGER,
+            preparation_topic_id INTEGER,
+            questions TEXT NOT NULL DEFAULT '',
+            couldnt_answer TEXT NOT NULL DEFAULT '',
+            what_learned TEXT NOT NULL DEFAULT '',
+            action_items TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE SET NULL,
+            FOREIGN KEY (preparation_topic_id) REFERENCES preparation_topics(id) ON DELETE SET NULL
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_performance_date ON performance_entries(date DESC, id DESC)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_performance_type ON performance_entries(type)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_performance_level ON performance_entries(performance)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_performance_opportunity ON performance_entries(opportunity_id)"
+    )
+
+
 MIGRATIONS = (
     (1, _create_current_tables),
     (2, _create_opportunities_table),
     (3, _create_preparation_tables),
     (4, _create_deep_work_tables),
     (5, _create_dashboard_settings_table),
+    (6, _create_performance_entries_table),
 )
 
 

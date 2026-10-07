@@ -285,6 +285,49 @@
           </table>
         </div>
       </section>
+      <section class="panel performance-journal-panel" id="performance-journal" aria-labelledby="performance-journal-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">LEARN FROM EACH EXPERIENCE</p>
+            <h2 id="performance-journal-title">Performance Journal</h2>
+          </div>
+          <a class="dashboard-card-link" href="#performance-entry-form">Add an entry &darr;</a>
+        </div>
+        <div class="performance-summary" aria-live="polite">
+          <strong id="performance-total">0 entries</strong>
+          <span id="performance-summary-levels">Good 0 &middot; Mixed 0 &middot; Poor 0</span>
+        </div>
+        <form id="performance-entry-form" class="performance-form">
+          <h3 id="performance-form-title">Record an experience</h3>
+          <div class="performance-form-grid">
+            <label>Company<input id="performance-company" maxlength="200"></label>
+            <label>Role<input id="performance-role" maxlength="200"></label>
+            <label>Date<input id="performance-date" type="date" required></label>
+            <label>Type<select id="performance-type" required>
+              <option>Assessment</option><option>Coding Test</option><option>Technical Interview</option><option>HR Interview</option><option>Mock Interview</option>
+            </select></label>
+            <label>Performance<select id="performance-level" required><option>Good</option><option>Mixed</option><option>Poor</option></select></label>
+            <label>Opportunity (optional)<select id="performance-opportunity"><option value="">No linked opportunity</option></select></label>
+            <label>Preparation topic (optional)<select id="performance-topic"><option value="">No linked topic</option></select></label>
+          </div>
+          <label>Questions or topics<textarea id="performance-questions" rows="2"></textarea></label>
+          <label>Couldn't answer<textarea id="performance-couldnt-answer" rows="2"></textarea></label>
+          <label>What I learned<textarea id="performance-what-learned" rows="2"></textarea></label>
+          <label>Action items<textarea id="performance-action-items" rows="2"></textarea></label>
+          <label>Notes<textarea id="performance-notes" rows="2"></textarea></label>
+          <div class="performance-form-actions"><button type="submit" id="performance-save-button">Save Entry</button><button type="button" class="secondary-button" id="performance-cancel-edit" hidden>Cancel edit</button></div>
+          <p class="panel-description" id="performance-message" role="status" aria-live="polite"></p>
+        </form>
+        <div class="performance-list-heading"><h3>Recent Entries</h3>
+          <div class="performance-filters">
+            <label>Type<select id="performance-filter-type"><option value="">All types</option><option>Assessment</option><option>Coding Test</option><option>Technical Interview</option><option>HR Interview</option><option>Mock Interview</option></select></label>
+            <label>Performance<select id="performance-filter-level"><option value="">All levels</option><option>Good</option><option>Mixed</option><option>Poor</option></select></label>
+            <label>Company<input id="performance-filter-company" type="search" placeholder="Filter company"></label>
+            <label>Date<input id="performance-filter-date" type="date"></label>
+          </div>
+        </div>
+        <div id="performance-entry-list" class="performance-entry-list" aria-live="polite">Loading journal&hellip;</div>
+      </section>
       <footer class="page-footer"><span>Progress is built one focused day at a time.</span><span class="footer-mark">PLACEMENT SPRINT <b>·</b> 30 DAYS</span></footer>
     </main>
   </div>

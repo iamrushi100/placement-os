@@ -235,3 +235,41 @@ textarea { display: block; width: 100%; min-height: 96px; resize: vertical; marg
   .pipeline-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .category-progress-row { grid-template-columns: minmax(80px, 1fr) 1fr auto; }
 }
+
+.performance-journal-panel { margin-top: 22px; padding: 21px; }
+.performance-journal-panel h2 { margin-bottom: 0; }
+.performance-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 14px 0 22px; padding: 12px 14px; border-radius: 10px; background: #f7f9f6; color: #657269; font-size: 11px; }
+.performance-summary strong { color: var(--green); font-size: 15px; }
+.performance-form { padding: 17px; border: 1px solid #edf0ec; border-radius: 11px; background: #fcfdfb; }
+.performance-form h3, .performance-list-heading h3 { margin: 0 0 13px; font-size: 14px; }
+.performance-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.performance-form label, .performance-filters label { display: grid; gap: 5px; color: #758178; font-size: 10px; font-weight: 650; }
+.performance-form input, .performance-form select, .performance-filters input, .performance-filters select { width: 100%; min-height: 37px; padding: 8px 9px; border: 1px solid #e4e9e3; border-radius: 7px; background: white; color: var(--ink); font-size: 11px; }
+.performance-form textarea { min-height: 62px; margin-top: 9px; }
+.performance-form-actions { display: flex; gap: 8px; margin-top: 13px; }
+.performance-form-actions button, .performance-entry-actions button { min-height: 35px; padding: 0 13px; border: 0; border-radius: 7px; background: var(--green); color: white; font-size: 10px; font-weight: 650; cursor: pointer; }
+.performance-form-actions .secondary-button, .performance-entry-actions .secondary-button { border: 1px solid #dfe6df; background: white; color: #59695e; }
+.performance-list-heading { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin-top: 23px; }
+.performance-list-heading h3 { margin-bottom: 3px; }
+.performance-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.performance-filters label { min-width: 120px; }
+.performance-entry-list { display: grid; gap: 10px; margin-top: 12px; }
+.performance-entry-card { padding: 15px; border: 1px solid #edf0ec; border-radius: 10px; background: white; }
+.performance-entry-card h4 { margin: 0; color: #34483a; font-size: 13px; }
+.performance-entry-meta { margin: 4px 0 10px; color: #78847b; font-size: 10px; }
+.performance-entry-badge { display: inline-block; margin-left: 6px; padding: 3px 7px; border-radius: 20px; background: #f1f4ef; color: #66786a; font-size: 9px; font-weight: 700; }
+.performance-entry-field { margin: 8px 0 0; color: #56645a; font-size: 11px; white-space: pre-wrap; }
+.performance-entry-field strong { color: #37493b; }
+.performance-entry-links { margin-top: 7px; color: #758178; font-size: 10px; }
+.performance-entry-actions { display: flex; gap: 7px; margin-top: 11px; }
+.performance-entry-actions button { min-height: 29px; padding: 0 10px; }
+.performance-entry-actions .delete-button { border: 1px solid #eadede; background: white; color: #9b5656; }
+@media (max-width: 700px) {
+  .performance-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .performance-form-grid { grid-template-columns: 1fr; }
+  .performance-journal-panel { padding: 15px; }
+  .performance-list-heading { align-items: stretch; }
+  .performance-filters { display: grid; grid-template-columns: 1fr 1fr; }
+}

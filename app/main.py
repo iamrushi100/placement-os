@@ -1,8 +1,9 @@
 import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.database import DATABASE_PATH, database_connection, initialize_database
@@ -36,6 +37,12 @@ from app.schemas import (
     DashboardResponse,
     DashboardSettingsResponse,
     DashboardSettingsUpdate,
+    PerformanceEntryCreate,
+    PerformanceEntryResponse,
+    PerformanceEntryUpdate,
+    PerformanceLevel,
+    PerformanceSummaryResponse,
+    PerformanceType,
 )
 
 app = FastAPI()
@@ -1176,6 +1183,183 @@ def get_dashboard():
         "deep_work": deep_work,
         "today": {"mits": mits, "incomplete_topics": incomplete_topics},
     }
+
+PERFORMANCE_ENTRY_SELECT = (
+    "entry.id, COALESCE(opportunity.company, entry.company) AS company, "
+    "COALESCE(opportunity.role, entry.role) AS role, entry.date, entry.type, "
+    "entry.performance, entry.opportunity_id, entry.preparation_topic_id, "
+    "topic.name AS preparation_topic_name, category.name AS preparation_category, "
+    "entry.questions, entry.couldnt_answer, entry.what_learned, "
+    "entry.action_items, entry.notes, entry.created_at, entry.updated_at"
+)
+PERFORMANCE_ENTRY_FROM = (
+    "performance_entries AS entry "
+    "LEFT JOIN opportunities AS opportunity ON opportunity.id = entry.opportunity_id "
+    "LEFT JOIN preparation_topics AS topic ON topic.id = entry.preparation_topic_id "
+    "LEFT JOIN preparation_categories AS category ON category.id = topic.category_id"
+)
+PERFORMANCE_TYPES = ("Assessment", "Coding Test", "Technical Interview", "HR Interview", "Mock Interview")
+PERFORMANCE_LEVELS = ("Good", "Mixed", "Poor")
+
+
+def _get_performance_entry(connection: sqlite3.Connection, entry_id: int):
+    return connection.execute(
+        f"SELECT {PERFORMANCE_ENTRY_SELECT} FROM {PERFORMANCE_ENTRY_FROM} WHERE entry.id = ?",
+        (entry_id,),
+    ).fetchone()
+
+
+def _validate_performance_references(connection: sqlite3.Connection, values: dict) -> None:
+    opportunity_id = values.get("opportunity_id")
+    if opportunity_id is not None and connection.execute(
+        "SELECT 1 FROM opportunities WHERE id = ?", (opportunity_id,)
+    ).fetchone() is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    topic_id = values.get("preparation_topic_id")
+    if topic_id is not None and connection.execute(
+        "SELECT 1 FROM preparation_topics WHERE id = ?", (topic_id,)
+    ).fetchone() is None:
+        raise HTTPException(status_code=404, detail="Preparation topic not found")
+
+
+@app.post("/api/performance", response_model=PerformanceEntryResponse, status_code=201)
+def create_performance_entry(entry: PerformanceEntryCreate):
+    values = entry.model_dump()
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        _validate_performance_references(connection, values)
+        cursor = connection.execute(
+            "INSERT INTO performance_entries "
+            "(company, role, date, type, performance, opportunity_id, preparation_topic_id, "
+            "questions, couldnt_answer, what_learned, action_items, notes) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (values["company"], values["role"], values["date"].isoformat(), values["type"],
+             values["performance"], values["opportunity_id"], values["preparation_topic_id"],
+             values["questions"], values["couldnt_answer"], values["what_learned"],
+             values["action_items"], values["notes"]),
+        )
+        return dict(_get_performance_entry(connection, cursor.lastrowid))
+
+
+@app.get("/api/performance/summary", response_model=PerformanceSummaryResponse)
+def get_performance_summary():
+    today = date.today()
+    recent_start = (today - timedelta(days=29)).isoformat()
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        total = connection.execute("SELECT COUNT(*) FROM performance_entries").fetchone()[0]
+        type_counts = {value: 0 for value in PERFORMANCE_TYPES}
+        for row in connection.execute(
+            "SELECT type, COUNT(*) AS count FROM performance_entries GROUP BY type"
+        ).fetchall():
+            type_counts[row["type"]] = row["count"]
+        performance_counts = {value: 0 for value in PERFORMANCE_LEVELS}
+        for row in connection.execute(
+            "SELECT performance, COUNT(*) AS count FROM performance_entries GROUP BY performance"
+        ).fetchall():
+            performance_counts[row["performance"]] = row["count"]
+        recent = connection.execute(
+            "SELECT COUNT(*) FROM performance_entries WHERE date BETWEEN ? AND ?",
+            (recent_start, today.isoformat()),
+        ).fetchone()[0]
+    return {
+        "total": total,
+        "by_type": type_counts,
+        "by_performance": performance_counts,
+        "recent_entries": recent,
+    }
+
+
+@app.get("/api/performance", response_model=list[PerformanceEntryResponse])
+def list_performance_entries(
+    type: PerformanceType | None = None,
+    performance: PerformanceLevel | None = None,
+    company: str | None = None,
+    opportunity_id: Annotated[int | None, Query(ge=1)] = None,
+    date: date | None = None,
+):
+    conditions = []
+    parameters = []
+    for column, value in (("entry.type", type), ("entry.performance", performance),
+                          ("entry.opportunity_id", opportunity_id)):
+        if value is not None:
+            conditions.append(f"{column} = ?")
+            parameters.append(value)
+    if company is not None:
+        conditions.append("LOWER(COALESCE(opportunity.company, entry.company, '')) = LOWER(?)")
+        parameters.append(company.strip())
+    if date is not None:
+        conditions.append("entry.date = ?")
+        parameters.append(date.isoformat())
+    query = f"SELECT {PERFORMANCE_ENTRY_SELECT} FROM {PERFORMANCE_ENTRY_FROM}"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY entry.date DESC, entry.created_at DESC, entry.id DESC"
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        return [dict(row) for row in connection.execute(query, parameters).fetchall()]
+
+
+@app.get("/api/performance/{entry_id}", response_model=PerformanceEntryResponse)
+def get_performance_entry(entry_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        entry = _get_performance_entry(connection, entry_id)
+        if entry is None:
+            raise HTTPException(status_code=404, detail="Performance entry not found")
+        return dict(entry)
+
+
+@app.put("/api/performance/{entry_id}", response_model=PerformanceEntryResponse)
+def update_performance_entry(entry_id: int, changes: PerformanceEntryUpdate):
+    updates = changes.model_dump(exclude_unset=True)
+    for field in ("date", "type", "performance", "company", "role", "opportunity_id",
+                  "preparation_topic_id", "questions", "couldnt_answer", "what_learned",
+                  "action_items", "notes"):
+        if field in updates and isinstance(updates[field], date):
+            updates[field] = updates[field].isoformat()
+    with database_connection(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        current = connection.execute(
+            "SELECT opportunity_id FROM performance_entries WHERE id = ?", (entry_id,)
+        ).fetchone()
+        if current is None:
+            raise HTTPException(status_code=404, detail="Performance entry not found")
+        if "opportunity_id" in updates and updates["opportunity_id"] is not None:
+            if "company" in updates or "role" in updates:
+                raise HTTPException(status_code=422, detail="Company and role are read from the linked opportunity")
+        elif current["opportunity_id"] is not None and (
+            ("company" in updates or "role" in updates) and "opportunity_id" not in updates
+        ):
+            raise HTTPException(status_code=422, detail="Clear opportunity_id before setting company or role")
+        _validate_performance_references(connection, updates)
+        if "questions" in updates and updates["questions"] is None:
+            updates["questions"] = ""
+        if "couldnt_answer" in updates and updates["couldnt_answer"] is None:
+            updates["couldnt_answer"] = ""
+        if "what_learned" in updates and updates["what_learned"] is None:
+            updates["what_learned"] = ""
+        if "action_items" in updates and updates["action_items"] is None:
+            updates["action_items"] = ""
+        if "notes" in updates and updates["notes"] is None:
+            updates["notes"] = ""
+        assignments = [f"{field} = ?" for field in updates]
+        values = list(updates.values())
+        assignments.append("updated_at = CURRENT_TIMESTAMP")
+        connection.execute(
+            "UPDATE performance_entries SET " + ", ".join(assignments) + " WHERE id = ?",
+            (*values, entry_id),
+        )
+        return dict(_get_performance_entry(connection, entry_id))
+
+
+@app.delete("/api/performance/{entry_id}", status_code=204)
+def delete_performance_entry(entry_id: int):
+    with database_connection(DATABASE_PATH) as connection:
+        cursor = connection.execute("DELETE FROM performance_entries WHERE id = ?", (entry_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Performance entry not found")
+
 
 @app.get("/")
 async def root():

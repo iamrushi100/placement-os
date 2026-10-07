@@ -754,10 +754,263 @@ function handleDashboardTargetSubmit(event) {
   );
 }
 
+let editingPerformanceEntryId = null;
+let performanceOptionsLoaded = false;
+
+async function requestApi(path, options = {}) {
+  const response = await fetch(path, options);
+  if (!response.ok) {
+    let detail = `Request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch { /* Keep the readable status fallback. */ }
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+function setPerformanceMessage(message) {
+  const element = document.getElementById("performance-message");
+  if (element) element.textContent = message;
+}
+
+function performanceFormPayload() {
+  const opportunityId = document.getElementById("performance-opportunity").value;
+  const topicId = document.getElementById("performance-topic").value;
+  const payload = {
+    date: document.getElementById("performance-date").value,
+    type: document.getElementById("performance-type").value,
+    performance: document.getElementById("performance-level").value,
+    opportunity_id: opportunityId ? Number(opportunityId) : null,
+    preparation_topic_id: topicId ? Number(topicId) : null,
+    questions: document.getElementById("performance-questions").value,
+    couldnt_answer: document.getElementById("performance-couldnt-answer").value,
+    what_learned: document.getElementById("performance-what-learned").value,
+    action_items: document.getElementById("performance-action-items").value,
+    notes: document.getElementById("performance-notes").value
+  };
+  if (!opportunityId) {
+    payload.company = document.getElementById("performance-company").value.trim() || null;
+    payload.role = document.getElementById("performance-role").value.trim() || null;
+  }
+  return payload;
+}
+
+function resetPerformanceForm() {
+  const form = document.getElementById("performance-entry-form");
+  form.reset();
+  document.getElementById("performance-date").value = getLocalDateString();
+  document.getElementById("performance-form-title").textContent = "Record an experience";
+  document.getElementById("performance-save-button").textContent = "Save Entry";
+  document.getElementById("performance-cancel-edit").hidden = true;
+  editingPerformanceEntryId = null;
+}
+
+async function handlePerformanceSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const method = editingPerformanceEntryId === null ? "POST" : "PUT";
+  const path = editingPerformanceEntryId === null
+    ? "/api/performance"
+    : `/api/performance/${editingPerformanceEntryId}`;
+  try {
+    await requestApi(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(performanceFormPayload())
+    });
+    resetPerformanceForm();
+    setPerformanceMessage(method === "POST" ? "Journal entry saved." : "Journal entry updated.");
+    await Promise.all([loadPerformanceEntries(), loadPerformanceSummary()]);
+  } catch (error) {
+    setPerformanceMessage(error.message || "Couldn't save this journal entry.");
+  }
+}
+
+function renderPerformanceEntries(entries) {
+  const list = document.getElementById("performance-entry-list");
+  if (!list) return;
+  list.replaceChildren();
+  if (entries.length === 0) {
+    list.textContent = "No performance entries match these filters.";
+    return;
+  }
+  entries.forEach((entry) => {
+    const card = document.createElement("article");
+    card.className = "performance-entry-card";
+    const title = document.createElement("h4");
+    title.textContent = `${entry.type} \u2014 ${entry.performance}`;
+    const badge = document.createElement("span");
+    badge.className = "performance-entry-badge";
+    badge.textContent = entry.date;
+    title.append(badge);
+    card.append(title);
+    const identity = [entry.company, entry.role].filter(Boolean).join(" \u00b7 ");
+    const meta = document.createElement("p");
+    meta.className = "performance-entry-meta";
+    meta.textContent = identity || "Personal practice";
+    card.append(meta);
+    const fields = [
+      ["Questions", entry.questions],
+      ["Couldn't answer", entry.couldnt_answer],
+      ["What I learned", entry.what_learned],
+      ["Action items", entry.action_items],
+      ["Notes", entry.notes]
+    ];
+    fields.forEach(([label, value]) => {
+      if (!value) return;
+      const field = document.createElement("p");
+      field.className = "performance-entry-field";
+      const strong = document.createElement("strong");
+      strong.textContent = `${label}: `;
+      field.append(strong, document.createTextNode(value));
+      card.append(field);
+    });
+    const links = [];
+    if (entry.preparation_topic_name) {
+      links.push(entry.preparation_category
+        ? `${entry.preparation_category} \u2192 ${entry.preparation_topic_name}`
+        : entry.preparation_topic_name);
+    }
+    if (entry.opportunity_id) links.push("Linked opportunity");
+    if (links.length) {
+      const linkNote = document.createElement("p");
+      linkNote.className = "performance-entry-links";
+      linkNote.textContent = links.join(" \u00b7 ");
+      card.append(linkNote);
+    }
+    const actions = document.createElement("div");
+    actions.className = "performance-entry-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "secondary-button";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => beginPerformanceEdit(entry));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "delete-button";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => void deletePerformanceEntry(entry.id));
+    actions.append(edit, remove);
+    card.append(actions);
+    list.append(card);
+  });
+}
+
+async function loadPerformanceEntries() {
+  const list = document.getElementById("performance-entry-list");
+  if (!list) return;
+  const params = new URLSearchParams();
+  const filters = [
+    ["type", "performance-filter-type"],
+    ["performance", "performance-filter-level"],
+    ["company", "performance-filter-company"],
+    ["date", "performance-filter-date"]
+  ];
+  filters.forEach(([key, id]) => {
+    const value = document.getElementById(id)?.value.trim();
+    if (value) params.set(key, value);
+  });
+  try {
+    const entries = await getJson(`/api/performance${params.size ? `?${params}` : ""}`);
+    renderPerformanceEntries(entries);
+  } catch {
+    list.textContent = "Performance entries couldn't be loaded. Try refreshing the page.";
+  }
+}
+
+async function loadPerformanceSummary() {
+  try {
+    const summary = await getJson("/api/performance/summary");
+    document.getElementById("performance-total").textContent = `${summary.total} ${summary.total === 1 ? "entry" : "entries"}`;
+    document.getElementById("performance-summary-levels").textContent =
+      `Good ${summary.by_performance.Good} \u00b7 Mixed ${summary.by_performance.Mixed} \u00b7 Poor ${summary.by_performance.Poor}`;
+  } catch {
+    document.getElementById("performance-summary-levels").textContent = "Summary couldn't be loaded.";
+  }
+}
+
+async function loadPerformanceOptions() {
+  if (performanceOptionsLoaded) return;
+  const [opportunities, topics] = await Promise.all([
+    getJson("/api/opportunities"),
+    getJson("/api/preparation/topics")
+  ]);
+  const opportunitySelect = document.getElementById("performance-opportunity");
+  opportunities.forEach((opportunity) => {
+    const option = document.createElement("option");
+    option.value = opportunity.id;
+    option.textContent = `${opportunity.company} \u2014 ${opportunity.role}`;
+    opportunitySelect.append(option);
+  });
+  const topicSelect = document.getElementById("performance-topic");
+  topics.forEach((topic) => {
+    const option = document.createElement("option");
+    option.value = topic.id;
+    option.textContent = `${topic.category} \u2192 ${topic.name}`;
+    topicSelect.append(option);
+  });
+  performanceOptionsLoaded = true;
+}
+
+function beginPerformanceEdit(entry) {
+  editingPerformanceEntryId = entry.id;
+  document.getElementById("performance-form-title").textContent = "Edit journal entry";
+  document.getElementById("performance-save-button").textContent = "Save Changes";
+  document.getElementById("performance-cancel-edit").hidden = false;
+  const values = {
+    "performance-company": entry.company || "",
+    "performance-role": entry.role || "",
+    "performance-date": entry.date,
+    "performance-type": entry.type,
+    "performance-level": entry.performance,
+    "performance-opportunity": entry.opportunity_id || "",
+    "performance-topic": entry.preparation_topic_id || "",
+    "performance-questions": entry.questions,
+    "performance-couldnt-answer": entry.couldnt_answer,
+    "performance-what-learned": entry.what_learned,
+    "performance-action-items": entry.action_items,
+    "performance-notes": entry.notes
+  };
+  Object.entries(values).forEach(([id, value]) => { document.getElementById(id).value = value; });
+  document.getElementById("performance-journal-title").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function deletePerformanceEntry(entryId) {
+  try {
+    await requestApi(`/api/performance/${entryId}`, { method: "DELETE" });
+    setPerformanceMessage("Journal entry deleted.");
+    await Promise.all([loadPerformanceEntries(), loadPerformanceSummary()]);
+  } catch (error) {
+    setPerformanceMessage(error.message || "Couldn't delete this journal entry.");
+  }
+}
+
+function performanceFiltersChanged() {
+  void loadPerformanceEntries();
+}
+
 document.getElementById("mit-form")?.addEventListener("submit", handleMitSubmit);
 document.getElementById("reflection-form")?.addEventListener("submit", handleReflectionSubmit);
 document.getElementById("dashboard-goal-form")?.addEventListener("submit", handleDashboardGoalSubmit);
 document.getElementById("dashboard-target-form")?.addEventListener("submit", handleDashboardTargetSubmit);
+document.getElementById("performance-entry-form")?.addEventListener("submit", handlePerformanceSubmit);
+document.getElementById("performance-cancel-edit")?.addEventListener("click", resetPerformanceForm);
+["performance-filter-type", "performance-filter-level", "performance-filter-company", "performance-filter-date"].forEach((id) => {
+  const input = document.getElementById(id);
+  input?.addEventListener(input.tagName === "SELECT" ? "change" : "input", performanceFiltersChanged);
+});
+if (document.getElementById("performance-entry-form")) {
+  document.getElementById("performance-date").value = getLocalDateString();
+  void Promise.all([loadPerformanceOptions(), loadPerformanceEntries(), loadPerformanceSummary()]).catch(() => {
+    const list = document.getElementById("performance-entry-list");
+    if (list) list.textContent = "Journal options couldn't be loaded. Please refresh to try again.";
+  });
+}
 void loadPlacementDashboard();
 
 loadDashboard().catch(() => {

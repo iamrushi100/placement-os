@@ -1,4 +1,5 @@
 from datetime import date
+from datetime import date as PerformanceDate
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -410,3 +411,103 @@ class DashboardResponse(BaseModel):
     preparation: DashboardPreparationSummary
     deep_work: DashboardDeepWorkSummary
     today: DashboardTodayFocus
+
+
+PerformanceType = Literal[
+    "Assessment",
+    "Coding Test",
+    "Technical Interview",
+    "HR Interview",
+    "Mock Interview",
+]
+PerformanceLevel = Literal["Good", "Mixed", "Poor"]
+
+
+class PerformanceEntryCreate(BaseModel):
+    date: PerformanceDate
+    type: PerformanceType
+    performance: PerformanceLevel
+    company: str | None = None
+    role: str | None = None
+    opportunity_id: int | None = Field(default=None, ge=1)
+    preparation_topic_id: int | None = Field(default=None, ge=1)
+    questions: str = ""
+    couldnt_answer: str = ""
+    what_learned: str = ""
+    action_items: str = ""
+    notes: str = ""
+
+    @field_validator("company", "role")
+    @classmethod
+    def optional_identity_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        return text or None
+
+    @model_validator(mode="after")
+    def linked_opportunity_owns_company_and_role(self):
+        if self.opportunity_id is not None and (self.company is not None or self.role is not None):
+            raise ValueError("Company and role are read from the linked opportunity")
+        return self
+
+
+class PerformanceEntryUpdate(BaseModel):
+    date: PerformanceDate | None = None
+    type: PerformanceType | None = None
+    performance: PerformanceLevel | None = None
+    company: str | None = None
+    role: str | None = None
+    opportunity_id: int | None = Field(default=None, ge=1)
+    preparation_topic_id: int | None = Field(default=None, ge=1)
+    questions: str | None = None
+    couldnt_answer: str | None = None
+    what_learned: str | None = None
+    action_items: str | None = None
+    notes: str | None = None
+
+    @field_validator("company", "role")
+    @classmethod
+    def supplied_identity_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        return text or None
+
+    @model_validator(mode="after")
+    def required_values_cannot_be_cleared(self):
+        if not self.model_fields_set:
+            raise ValueError("Supply at least one field to update")
+        for field_name in ("date", "type", "performance"):
+            if field_name in self.model_fields_set and getattr(self, field_name) is None:
+                raise ValueError(f"{field_name} cannot be null")
+        if self.opportunity_id is not None and (self.company is not None or self.role is not None):
+            raise ValueError("Company and role are read from the linked opportunity")
+        return self
+
+
+class PerformanceEntryResponse(BaseModel):
+    id: int
+    company: str | None
+    role: str | None
+    date: PerformanceDate
+    type: PerformanceType
+    performance: PerformanceLevel
+    opportunity_id: int | None
+    preparation_topic_id: int | None
+    preparation_topic_name: str | None
+    preparation_category: str | None
+    questions: str
+    couldnt_answer: str
+    what_learned: str
+    action_items: str
+    notes: str
+    created_at: str
+    updated_at: str
+
+
+class PerformanceSummaryResponse(BaseModel):
+    total: int
+    by_type: dict[str, int]
+    by_performance: dict[str, int]
+    recent_entries: int

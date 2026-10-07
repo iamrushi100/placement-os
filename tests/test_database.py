@@ -36,6 +36,7 @@ EXPECTED_TABLES = {
     "deep_work_sessions",
     "deep_work_active_timer",
     "app_settings",
+    "performance_entries",
 }
 
 

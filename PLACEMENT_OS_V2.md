@@ -170,3 +170,21 @@ The frontend extends the existing page with compact summary cards, pipeline/dead
 ### Testing and design decisions
 
 Standard-library tests cover setting defaults and updates, active versus terminal applications, pipeline counts and deadline selection, empty and populated preparation progress, daily and weekly Deep Work calculations, target/scoring separation, MIT/topic focus, and response validation. This keeps the dashboard explainable as a dynamic view over source records rather than a new tracking subsystem.
+
+
+## Module 5 — Performance Journal
+
+The Performance Journal records what happened in assessments, coding tests, interviews, and mock interviews, then keeps the user's lessons and action items together. Types are Assessment, Coding Test, Technical Interview, HR Interview, and Mock Interview; performance is Good, Mixed, or Poor. Questions, gaps, lessons, action items, and notes remain plain text so the journal is easy to use without creating a separate question bank or task tracker.
+
+Migration version 6 adds `performance_entries`. Each dated record can optionally link to an opportunity and a preparation topic. These foreign keys use `ON DELETE SET NULL`: deleting a linked opportunity or topic preserves the journal record. When an opportunity is linked, company and role are displayed from that opportunity rather than copied into the journal. Topic links are references only; journal operations do not create topics, change their status, or increment practice counts.
+
+### API and frontend
+
+- `POST /api/performance` creates an entry.
+- `GET /api/performance` lists newest first and accepts `type`, `performance`, `company`, `opportunity_id`, and `date` filters.
+- `GET /api/performance/{entry_id}`, `PUT /api/performance/{entry_id}`, and `DELETE /api/performance/{entry_id}` read, update, and remove an entry.
+- `GET /api/performance/summary` dynamically returns total entries, counts by type and performance, and entries in the latest 30 calendar days (through today).
+
+The dashboard journal form uses the existing opportunity and preparation topic APIs for optional dropdown links. Entries can be reviewed, filtered, edited, and deleted with the existing vanilla JavaScript frontend. The learning loop remains user-directed: journal an experience, choose an action, connect it to a topic if helpful, then practice through Preparation Tracking.
+
+Standard-library tests cover CRUD, filters, validation, missing references, optional and valid relationships, summary counts, no automatic topic changes, and migration from schema version 5 with V1/V2 data preserved. The full suite also exercises existing habit, opportunity, preparation, deep-work, and dashboard workflows. No new runtime or test dependencies were added.
