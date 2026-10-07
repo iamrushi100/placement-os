@@ -55,6 +55,37 @@
         </article>
       </section>
 
+      <section class="panel analytics-panel" aria-labelledby="sprint-analytics-title">
+        <div class="panel-heading analytics-heading">
+          <div>
+            <p class="eyebrow">SPRINT OVERVIEW</p>
+            <h2 id="sprint-analytics-title">Sprint Analytics</h2>
+          </div>
+        </div>
+        <div class="analytics-grid">
+          <article class="analytics-card">
+            <p class="analytics-label">Average Score</p>
+            <p class="analytics-value" id="analytics-average-score">—</p>
+          </article>
+          <article class="analytics-card">
+            <p class="analytics-label">Average Deep Work</p>
+            <p class="analytics-value" id="analytics-average-deep-work">—</p>
+          </article>
+          <article class="analytics-card">
+            <p class="analytics-label">Habit Completion Rate</p>
+            <p class="analytics-value" id="analytics-habit-rate">—</p>
+          </article>
+          <article class="analytics-card">
+            <p class="analytics-label">Successful Days</p>
+            <p class="analytics-value" id="analytics-successful-days">—</p>
+          </article>
+          <article class="analytics-card">
+            <p class="analytics-label">Best Streak</p>
+            <p class="analytics-value" id="analytics-best-streak">—</p>
+          </article>
+        </div>
+        <p class="panel-description analytics-message" id="analytics-message" role="status" aria-live="polite" hidden></p>
+      </section>
       <div class="dashboard-grid">
         <section class="panel habits-panel" aria-labelledby="habits-title">
           <div class="panel-heading">

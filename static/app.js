@@ -366,11 +366,45 @@ async function loadSprintHistory() {
     }
   }
 }
+async function loadSprintAnalytics() {
+  const metricElements = {
+    average_score: document.getElementById("analytics-average-score"),
+    average_deep_work_minutes: document.getElementById("analytics-average-deep-work"),
+    habit_completion_rate: document.getElementById("analytics-habit-rate"),
+    successful_days: document.getElementById("analytics-successful-days"),
+    best_streak: document.getElementById("analytics-best-streak")
+  };
+  const message = document.getElementById("analytics-message");
+
+  try {
+    const analytics = await getJson("/api/analytics");
+    const values = {
+      average_score: `${analytics.average_score}/100`,
+      average_deep_work_minutes: `${analytics.average_deep_work_minutes} min`,
+      habit_completion_rate: `${analytics.habit_completion_rate}%`,
+      successful_days: String(analytics.successful_days),
+      best_streak: `${analytics.best_streak} days`
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      if (metricElements[key]) metricElements[key].textContent = value;
+    });
+    if (message) message.hidden = true;
+  } catch {
+    Object.values(metricElements).forEach((element) => {
+      if (element) element.textContent = "—";
+    });
+    if (message) {
+      message.textContent = "Sprint analytics couldn't be loaded.";
+      message.hidden = false;
+    }
+  }
+}
 async function loadDashboard() {
   const today = getLocalDateString();
   void loadMits(today);
   void loadReflection(today);
   void loadSprintHistory();
+  void loadSprintAnalytics();
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
     getJson(`/api/daily-score/${today}`),

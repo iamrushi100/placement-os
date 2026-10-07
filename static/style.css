@@ -75,6 +75,13 @@ h1 { margin-bottom: 7px; font-size: clamp(27px, 3vw, 34px); line-height: 1.15; l
 .card-spark { position: absolute; right: 24px; top: 17px; color: #aec9a4; font-size: 26px; }
 .score-ring { position: absolute; right: 24px; top: 30px; display: grid; width: 57px; height: 57px; place-items: center; border: 5px solid #efefe5; border-top-color: #b9b77a; border-radius: 50%; color: #83805a; font-size: 12px; font-weight: 700; }
 
+.analytics-panel { margin-bottom: 18px; padding: 18px 21px; }
+.analytics-heading { margin-bottom: 12px; }
+.analytics-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.analytics-card { min-width: 0; padding: 12px 13px; border: 1px solid #edf0ec; border-radius: 10px; background: #fbfcfa; }
+.analytics-label { margin: 0 0 4px; color: #7c8981; font-size: 10px; font-weight: 600; }
+.analytics-value { margin: 0; color: var(--ink); font-size: 18px; font-weight: 680; letter-spacing: -.4px; white-space: nowrap; }
+.analytics-message { margin-bottom: 0; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(310px, .9fr); align-items: start; gap: 18px; }
 .panel { border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow); }
 .habits-panel { padding: 22px 23px 12px; }
@@ -131,10 +138,10 @@ textarea { display: block; width: 100%; min-height: 96px; resize: vertical; marg
 @media (max-width: 820px) {
   .page-shell { width: min(100% - 36px, 620px); }
   .dashboard-grid { grid-template-columns: 1fr; }
+  .analytics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .side-column { grid-template-columns: 1fr 1fr; align-items: start; }
   .reflection-panel { grid-column: 1 / -1; }
 }
-
 @media (max-width: 560px) {
   .page-shell { width: calc(100% - 28px); }
   .topbar { height: 64px; }
@@ -157,6 +164,7 @@ textarea { display: block; width: 100%; min-height: 96px; resize: vertical; marg
   .habit-row { gap: 8px; }
   .habit-name { font-size: 11px; }
   .habit-category { padding: 3px 6px; font-size: 8px; }
+  .analytics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .side-column { grid-template-columns: 1fr; }
   .reflection-panel { grid-column: auto; }
   .sprint-history-panel { padding: 18px 14px; }

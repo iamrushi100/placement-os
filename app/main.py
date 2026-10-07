@@ -269,6 +269,67 @@ def get_sprint_history():
 
     return history
 
+@app.get("/api/analytics")
+def get_analytics():
+    today = date.today()
+    last_day = min(today, SPRINT_END)
+    if today < SPRINT_START:
+        return {
+            "average_score": 0,
+            "average_deep_work_minutes": 0,
+            "habit_completion_rate": 0,
+            "successful_days": 0,
+            "best_streak": 0,
+        }
+
+    elapsed_days = (last_day - SPRINT_START).days + 1
+    total_score = 0
+    total_deep_work_minutes = 0
+    successful_days = 0
+    current_streak = 0
+    best_streak = 0
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        active_habits = connection.execute(
+            "SELECT COUNT(*) FROM habits WHERE is_active = 1"
+        ).fetchone()[0]
+        completed_habit_records = connection.execute(
+            "SELECT COUNT(*) FROM habit_completions AS completion "
+            "JOIN habits AS habit ON habit.id = completion.habit_id "
+            "WHERE completion.date BETWEEN ? AND ? "
+            "AND completion.completed = 1 AND habit.is_active = 1",
+            (SPRINT_START.isoformat(), last_day.isoformat()),
+        ).fetchone()[0]
+
+        current_day = SPRINT_START
+        while current_day <= last_day:
+            daily_score = calculate_daily_score(connection, current_day)
+            daily_entry = connection.execute(
+                "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
+                (current_day.isoformat(),),
+            ).fetchone()
+            total_score += daily_score["score"]
+            total_deep_work_minutes += daily_entry[0] if daily_entry else 0
+
+            if daily_score["score"] >= PLACEMENT_THRESHOLD:
+                successful_days += 1
+                current_streak += 1
+                best_streak = max(best_streak, current_streak)
+            else:
+                current_streak = 0
+            current_day += timedelta(days=1)
+
+    possible_completions = active_habits * elapsed_days
+    return {
+        "average_score": int(round(total_score / elapsed_days)),
+        "average_deep_work_minutes": int(round(total_deep_work_minutes / elapsed_days)),
+        "habit_completion_rate": int(
+            round(completed_habit_records / possible_completions * 100)
+        ) if possible_completions else 0,
+        "successful_days": successful_days,
+        "best_streak": best_streak,
+    }
+
 @app.get("/api/placement-streak")
 def get_placement_streak():
     today = date.today()
