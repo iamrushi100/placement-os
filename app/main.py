@@ -1105,7 +1105,7 @@ def get_dashboard():
             pipeline_counts[row["status"]] = row["total"]
 
         deadline = connection.execute(
-            "SELECT id, company, role, deadline FROM opportunities "
+            "SELECT id AS opportunity_id, company, role, deadline FROM opportunities "
             f"WHERE deadline IS NOT NULL AND deadline >= ? AND status IN ({active_status_placeholders}) "
             "ORDER BY deadline, id LIMIT 1",
             (today_text, *ACTIVE_APPLICATION_STATUSES),

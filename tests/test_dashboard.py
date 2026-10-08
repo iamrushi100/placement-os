@@ -80,7 +80,9 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dashboard["applications"]["pipeline"]["Selected"], 1)
         self.assertEqual(dashboard["applications"]["pipeline"]["Rejected"], 1)
         self.assertEqual(dashboard["next_deadline"]["company"], "Inbox")
+        self.assertEqual(dashboard["next_deadline"]["opportunity_id"], 6)
         self.assertNotEqual(dashboard["next_deadline"]["company"], "Won")
+        DashboardResponse.model_validate(dashboard)
 
     def test_preparation_counts_category_progress_and_empty_state(self):
         empty = get_dashboard()["preparation"]

@@ -53,7 +53,7 @@
         </div>
 
         <div class="dashboard-metric-grid">
-          <a class="panel dashboard-metric-card" href="#dashboard-pipeline">
+          <a class="panel dashboard-metric-card" href="#opportunity-management">
             <span class="eyebrow">SERIOUS APPLICATIONS</span>
             <strong class="dashboard-metric-value" id="dashboard-active-applications">—</strong>
             <span class="dashboard-card-link">View pipeline ↓</span>
@@ -118,6 +118,67 @@
           </div>
         </section>
         <p class="dashboard-message dashboard-load-message" id="dashboard-load-message" role="status" aria-live="polite" hidden></p>
+      </section>
+
+      <section class="panel opportunity-panel" id="opportunity-management" aria-labelledby="opportunity-title">
+        <div class="panel-heading opportunity-heading">
+          <div>
+            <p class="eyebrow">FIND, EVALUATE, PURSUE</p>
+            <h2 id="opportunity-title">Opportunity Management</h2>
+          </div>
+          <span class="count-pill">Inbox to application pipeline</span>
+        </div>
+
+        <form id="opportunity-form" class="opportunity-form">
+          <h3 id="opportunity-form-title">Add an opportunity</h3>
+          <div class="opportunity-form-grid">
+            <label class="opportunity-field">Company<input id="opportunity-company" maxlength="200" required></label>
+            <label class="opportunity-field">Role<input id="opportunity-role" maxlength="200" required></label>
+            <label class="opportunity-field">Location<input id="opportunity-location" maxlength="200"></label>
+            <label class="opportunity-field">Source<input id="opportunity-source" maxlength="200" placeholder="Company site, referral, etc."></label>
+            <label class="opportunity-field">Job link<input id="opportunity-job-link" type="url" placeholder="https://..."></label>
+            <label class="opportunity-field">Status<select id="opportunity-status">
+              <option>Interested</option><option>Applied</option><option>Assessment</option><option>Interview</option><option>HR</option>
+              <option>Selected</option><option>Rejected</option><option>Withdrawn</option><option>Not Eligible</option><option>Expired</option>
+            </select></label>
+            <label class="opportunity-field">Priority<select id="opportunity-priority"><option>Low</option><option selected>Medium</option><option>High</option></select></label>
+            <label class="opportunity-field">CTC<input id="opportunity-ctc" maxlength="100" placeholder="e.g. 8-12 LPA"></label>
+            <label class="opportunity-field">Deadline<input id="opportunity-deadline" type="date"></label>
+            <label class="opportunity-field">Referral<input id="opportunity-referral" maxlength="200" placeholder="Name or referral details"></label>
+            <label class="opportunity-field">Eligibility<input id="opportunity-eligibility" maxlength="500"></label>
+            <label class="opportunity-field">Requirements<input id="opportunity-requirements" maxlength="1000"></label>
+            <label class="opportunity-check-field"><input id="opportunity-serious" type="checkbox"><span>Serious application</span></label>
+          </div>
+          <label class="opportunity-field opportunity-notes-field">Notes<textarea id="opportunity-notes" rows="3" maxlength="3000"></textarea></label>
+          <div class="opportunity-form-actions">
+            <button type="submit" id="opportunity-save-button">Save opportunity</button>
+            <button type="button" class="secondary-button" id="opportunity-cancel-edit" hidden>Cancel edit</button>
+          </div>
+          <p class="opportunity-message" id="opportunity-message" role="status" aria-live="polite"></p>
+        </form>
+
+        <div class="opportunity-list-heading">
+          <div><p class="eyebrow">YOUR OPPORTUNITIES</p><h3>Inbox and serious applications</h3></div>
+          <div class="opportunity-filters" aria-label="Filter opportunities">
+            <label>Status<select id="opportunity-filter-status"><option value="">All statuses</option>
+              <option>Interested</option><option>Applied</option><option>Assessment</option><option>Interview</option><option>HR</option>
+              <option>Selected</option><option>Rejected</option><option>Withdrawn</option><option>Not Eligible</option><option>Expired</option>
+            </select></label>
+            <label>Priority<select id="opportunity-filter-priority"><option value="">All priorities</option><option>Low</option><option>Medium</option><option>High</option></select></label>
+            <label>Group<select id="opportunity-filter-serious"><option value="">Inbox and serious</option><option value="false">Inbox only</option><option value="true">Serious only</option></select></label>
+          </div>
+        </div>
+        <p class="opportunity-list-message" id="opportunity-list-message" role="status" aria-live="polite"></p>
+        <div class="opportunity-groups">
+          <section class="opportunity-group" aria-labelledby="opportunity-inbox-title">
+            <div class="opportunity-group-heading"><h3 id="opportunity-inbox-title">Opportunity Inbox</h3><span class="count-pill" id="opportunity-inbox-count">0</span></div>
+            <div class="opportunity-list" id="opportunity-inbox-list"><p class="panel-description">Loading opportunities...</p></div>
+          </section>
+          <section class="opportunity-group" aria-labelledby="opportunity-serious-title">
+            <div class="opportunity-group-heading"><h3 id="opportunity-serious-title">Serious Applications</h3><span class="count-pill" id="opportunity-serious-count">0</span></div>
+            <div class="opportunity-list" id="opportunity-serious-list"><p class="panel-description">Loading applications...</p></div>
+          </section>
+        </div>
       </section>
 
       <section class="summary-grid" aria-label="Today's summary">

@@ -764,6 +764,284 @@ function handleDashboardTargetSubmit(event) {
   );
 }
 
+const OPPORTUNITY_STATUSES = [
+  "Interested", "Applied", "Assessment", "Interview", "HR",
+  "Selected", "Rejected", "Withdrawn", "Not Eligible", "Expired"
+];
+let opportunities = [];
+let editingOpportunityId = null;
+
+function opportunityFormPayload() {
+  const value = (id) => document.getElementById(id).value.trim();
+  return {
+    company: value("opportunity-company"),
+    role: value("opportunity-role"),
+    location: value("opportunity-location") || null,
+    source: value("opportunity-source") || null,
+    job_link: value("opportunity-job-link") || null,
+    status: document.getElementById("opportunity-status").value,
+    priority: document.getElementById("opportunity-priority").value,
+    ctc: value("opportunity-ctc") || null,
+    deadline: document.getElementById("opportunity-deadline").value || null,
+    referral: value("opportunity-referral") || null,
+    eligibility: value("opportunity-eligibility") || null,
+    requirements: value("opportunity-requirements") || null,
+    notes: value("opportunity-notes") || null,
+    is_serious: document.getElementById("opportunity-serious").checked
+  };
+}
+
+function resetOpportunityForm() {
+  document.getElementById("opportunity-form").reset();
+  document.getElementById("opportunity-form-title").textContent = "Add an opportunity";
+  document.getElementById("opportunity-save-button").textContent = "Save opportunity";
+  document.getElementById("opportunity-cancel-edit").hidden = true;
+  document.getElementById("opportunity-message").textContent = "";
+  editingOpportunityId = null;
+}
+
+function beginOpportunityEdit(opportunity) {
+  editingOpportunityId = opportunity.id;
+  document.getElementById("opportunity-form-title").textContent = "Edit opportunity";
+  document.getElementById("opportunity-save-button").textContent = "Save changes";
+  document.getElementById("opportunity-cancel-edit").hidden = false;
+  const values = {
+    "opportunity-company": opportunity.company,
+    "opportunity-role": opportunity.role,
+    "opportunity-location": opportunity.location || "",
+    "opportunity-source": opportunity.source || "",
+    "opportunity-job-link": opportunity.job_link || "",
+    "opportunity-status": opportunity.status,
+    "opportunity-priority": opportunity.priority,
+    "opportunity-ctc": opportunity.ctc || "",
+    "opportunity-deadline": opportunity.deadline || "",
+    "opportunity-referral": opportunity.referral || "",
+    "opportunity-eligibility": opportunity.eligibility || "",
+    "opportunity-requirements": opportunity.requirements || "",
+    "opportunity-notes": opportunity.notes || "",
+    "opportunity-serious": Boolean(opportunity.is_serious)
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const input = document.getElementById(id);
+    if (id === "opportunity-serious") input.checked = value;
+    else input.value = value;
+  });
+  document.getElementById("opportunity-management").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function appendOpportunityDetail(card, label, value) {
+  if (!value) return;
+  const detail = document.createElement("p");
+  detail.className = "opportunity-card-detail";
+  const name = document.createElement("strong");
+  name.textContent = `${label}: `;
+  detail.append(name, document.createTextNode(value));
+  card.append(detail);
+}
+
+function opportunityStatusSelect(opportunity) {
+  const select = document.createElement("select");
+  select.className = "opportunity-status-select";
+  select.setAttribute("aria-label", `Status for ${opportunity.company} ${opportunity.role}`);
+  OPPORTUNITY_STATUSES.forEach((status) => {
+    const option = document.createElement("option");
+    option.value = status;
+    option.textContent = status;
+    option.selected = status === opportunity.status;
+    select.append(option);
+  });
+  select.addEventListener("change", () => {
+    const previousStatus = opportunity.status;
+    void updateOpportunity(opportunity.id, { status: select.value }, "Opportunity status updated.")
+      .catch((error) => {
+        select.value = previousStatus;
+        setOpportunityListMessage(error.message || "Couldn't update opportunity status.");
+      });
+  });
+  return select;
+}
+
+function renderOpportunityCard(opportunity, container) {
+  const card = document.createElement("article");
+  card.className = "opportunity-card";
+  const heading = document.createElement("h4");
+  heading.textContent = opportunity.company;
+  card.append(heading);
+  const role = document.createElement("p");
+  role.className = "opportunity-card-role";
+  role.textContent = opportunity.role;
+  card.append(role);
+
+  const badges = document.createElement("div");
+  badges.className = "opportunity-card-meta";
+  const seriousBadge = document.createElement("span");
+  seriousBadge.className = `opportunity-badge${opportunity.is_serious ? " serious" : ""}`;
+  seriousBadge.textContent = opportunity.is_serious ? "Serious Application" : "Inbox";
+  const priorityBadge = document.createElement("span");
+  priorityBadge.className = `opportunity-badge${opportunity.priority === "High" ? " priority-high" : opportunity.priority === "Low" ? " priority-low" : ""}`;
+  priorityBadge.textContent = `${opportunity.priority} priority`;
+  badges.append(seriousBadge, priorityBadge, opportunityStatusSelect(opportunity));
+  if (opportunity.location) badges.append(createTextElement("span", "opportunity-badge", opportunity.location));
+  if (opportunity.deadline) badges.append(createTextElement("span", "opportunity-badge", `Deadline ${opportunity.deadline}`));
+  card.append(badges);
+
+  const sourceDetails = [
+    ["Source", opportunity.source], ["CTC", opportunity.ctc],
+    ["Referral", opportunity.referral], ["Eligibility", opportunity.eligibility],
+    ["Requirements", opportunity.requirements], ["Notes", opportunity.notes]
+  ];
+  sourceDetails.forEach(([label, value]) => appendOpportunityDetail(card, label, value));
+
+  if (opportunity.job_link) {
+    try {
+      const linkUrl = new URL(opportunity.job_link, window.location.origin);
+      if (linkUrl.protocol === "http:" || linkUrl.protocol === "https:") {
+        const link = document.createElement("a");
+        link.className = "opportunity-card-link";
+        link.href = linkUrl.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Open job link";
+        card.append(link);
+      }
+    } catch { /* Ignore malformed optional links. */ }
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "opportunity-card-actions";
+  const seriousButton = document.createElement("button");
+  seriousButton.type = "button";
+  seriousButton.className = "secondary-button";
+  seriousButton.textContent = opportunity.is_serious ? "Move to inbox" : "Mark serious";
+  seriousButton.addEventListener("click", () => {
+    void updateOpportunity(
+      opportunity.id,
+      { is_serious: !opportunity.is_serious },
+      opportunity.is_serious ? "Moved to Opportunity Inbox." : "Promoted to Serious Applications."
+    ).catch((error) => setOpportunityListMessage(error.message || "Couldn't update this opportunity."));
+  });
+
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.className = "secondary-button";
+  editButton.textContent = "Edit";
+  editButton.addEventListener("click", () => beginOpportunityEdit(opportunity));
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "delete-button";
+  deleteButton.textContent = "Delete";
+  deleteButton.addEventListener("click", () => void deleteOpportunity(opportunity));
+  actions.append(seriousButton, editButton, deleteButton);
+  card.append(actions);
+  container.append(card);
+}
+
+function setOpportunityListMessage(message) {
+  const element = document.getElementById("opportunity-list-message");
+  if (element) element.textContent = message;
+}
+
+function renderOpportunityLists() {
+  const inbox = document.getElementById("opportunity-inbox-list");
+  const serious = document.getElementById("opportunity-serious-list");
+  const statusFilter = document.getElementById("opportunity-filter-status").value;
+  const priorityFilter = document.getElementById("opportunity-filter-priority").value;
+  const seriousFilter = document.getElementById("opportunity-filter-serious").value;
+  const filtered = opportunities.filter((item) =>
+    (!statusFilter || item.status === statusFilter)
+    && (!priorityFilter || item.priority === priorityFilter)
+    && (seriousFilter === "" || String(item.is_serious) === seriousFilter)
+  );
+  const inboxItems = filtered.filter((item) => !item.is_serious);
+  const seriousItems = filtered.filter((item) => item.is_serious);
+  document.getElementById("opportunity-inbox-count").textContent = String(inboxItems.length);
+  document.getElementById("opportunity-serious-count").textContent = String(seriousItems.length);
+  inbox.replaceChildren();
+  serious.replaceChildren();
+  if (inboxItems.length === 0) {
+    inbox.textContent = opportunities.length === 0 ? "No opportunities added yet." : "No inbox opportunities match these filters.";
+  } else {
+    inboxItems.forEach((item) => renderOpportunityCard(item, inbox));
+  }
+  if (seriousItems.length === 0) {
+    serious.textContent = opportunities.length === 0 ? "No serious applications yet." : "No serious applications match these filters.";
+  } else {
+    seriousItems.forEach((item) => renderOpportunityCard(item, serious));
+  }
+}
+
+async function loadOpportunities() {
+  try {
+    opportunities = await requestApi("/api/opportunities");
+    renderOpportunityLists();
+  } catch (error) {
+    document.getElementById("opportunity-inbox-list").textContent = "Opportunities couldn't be loaded.";
+    document.getElementById("opportunity-serious-list").textContent = "Serious applications couldn't be loaded.";
+    setOpportunityListMessage(error.message || "Couldn't load opportunities. Please try again.");
+  }
+}
+
+async function updateOpportunity(opportunityId, changes, successMessage) {
+  await requestApi(`/api/opportunities/${opportunityId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes)
+  });
+  await Promise.all([loadOpportunities(), loadPlacementDashboard()]);
+  setOpportunityListMessage(successMessage);
+}
+
+async function deleteOpportunity(opportunity) {
+  const confirmed = window.confirm(`Delete ${opportunity.company} ? ${opportunity.role}? This cannot be undone.`);
+  if (!confirmed) return;
+  try {
+    await requestApi(`/api/opportunities/${opportunity.id}`, { method: "DELETE" });
+    if (editingOpportunityId === opportunity.id) resetOpportunityForm();
+    await Promise.all([loadOpportunities(), loadPlacementDashboard()]);
+    setOpportunityListMessage("Opportunity deleted.");
+  } catch (error) {
+    setOpportunityListMessage(error.message || "Couldn't delete this opportunity.");
+  }
+}
+
+async function handleOpportunitySubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const method = editingOpportunityId === null ? "POST" : "PUT";
+  const path = editingOpportunityId === null
+    ? "/api/opportunities"
+    : `/api/opportunities/${editingOpportunityId}`;
+  const message = document.getElementById("opportunity-message");
+  const button = document.getElementById("opportunity-save-button");
+  button.disabled = true;
+  if (message) message.textContent = "";
+  try {
+    await requestApi(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opportunityFormPayload())
+    });
+    resetOpportunityForm();
+    if (message) message.textContent = method === "POST" ? "Opportunity added." : "Opportunity updated.";
+    setOpportunityListMessage("");
+    await Promise.all([loadOpportunities(), loadPlacementDashboard()]);
+  } catch (error) {
+    if (message) {
+      message.textContent = error.status === 422
+        ? "Check the required fields and selected values, then try again."
+        : error.message || "Couldn't save this opportunity.";
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function opportunityFiltersChanged() {
+  renderOpportunityLists();
+}
+
 let editingPerformanceEntryId = null;
 let performanceOptionsLoaded = false;
 
@@ -1004,6 +1282,12 @@ function performanceFiltersChanged() {
   void loadPerformanceEntries();
 }
 
+document.getElementById("opportunity-form")?.addEventListener("submit", handleOpportunitySubmit);
+document.getElementById("opportunity-cancel-edit")?.addEventListener("click", resetOpportunityForm);
+["opportunity-filter-status", "opportunity-filter-priority", "opportunity-filter-serious"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", opportunityFiltersChanged);
+});
+void loadOpportunities();
 document.getElementById("mit-form")?.addEventListener("submit", handleMitSubmit);
 document.getElementById("reflection-form")?.addEventListener("submit", handleReflectionSubmit);
 document.getElementById("dashboard-goal-form")?.addEventListener("submit", handleDashboardGoalSubmit);

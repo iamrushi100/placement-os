@@ -86,6 +86,13 @@ replace or rewrite V1 data.
 The API uses Pydantic validation and parameterized SQLite queries. Invalid
 status/priority values are rejected; missing records return HTTP 404.
 
+### Dashboard interface
+
+The Opportunity Management section uses the same APIs to add, edit, delete,
+filter, and promote/demote opportunities. Inbox and Serious Applications are
+shown separately; status can be changed on each card. Opportunity changes reload
+the existing dashboard counts and pipeline.
+
 ### Design decisions and verification
 
 The inbox and serious application flow share one table, distinguished by
