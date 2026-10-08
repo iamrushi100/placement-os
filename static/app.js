@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 function getLocalDateString() {
   const today = new Date();
@@ -29,6 +29,17 @@ function setNote(elementId, message) {
   const element = document.getElementById(elementId);
   if (element) {
     element.textContent = message;
+  }
+}
+
+function setPlacementStreak(streak) {
+  setValueBeforeSuffix("placement-streak-value", streak.current_streak);
+  if (streak.period_status === "completed") {
+    setNote("placement-streak-note", `Final sprint streak through ${streak.as_of_date}: ${streak.current_streak} days`);
+  } else if (streak.period_status === "upcoming") {
+    setNote("placement-streak-note", `Sprint begins ${streak.sprint_start}`);
+  } else {
+    setNote("placement-streak-note", `Current sprint streak as of ${streak.as_of_date}`);
   }
 }
 
@@ -199,8 +210,7 @@ async function refreshAfterCompletion(today) {
   }
 
   if (streakResult.status === "fulfilled") {
-    setValueBeforeSuffix("placement-streak-value", streakResult.value.current_streak);
-    setNote("placement-streak-note", "Keep showing up, one day at a time");
+    setPlacementStreak(streakResult.value);
   } else {
     errors.push("placement streak");
     setValueBeforeSuffix("placement-streak-value", "—");
@@ -417,124 +427,313 @@ function updateSprintDay(sprintStart, sprintEnd, today = getLocalDateString()) {
   display.textContent = `Day ${elapsedDays} / ${totalDays}`;
 }
 
-function setDeepWorkState(minutes, saved, messageText = "") {
-  const display = document.getElementById("deep-work-value");
-  const input = document.getElementById("deep-work-minutes");
-  const button = document.getElementById("deep-work-save");
-  const message = document.getElementById("deep-work-message");
-  if (display && display.firstChild) {
-    display.firstChild.textContent = minutes === null ? "— " : `${minutes} `;
-  }
-  if (input) {
-    if (minutes !== null) input.value = String(minutes);
-    input.disabled = saved || minutes === null;
-  }
-  if (button) {
-    button.disabled = saved || minutes === null;
-    button.dataset.saved = String(saved);
-  }
-  if (message) message.textContent = messageText;
+let deepWorkTimerInterval = null;
+
+function selectedDeepWorkDate() {
+  return document.getElementById("deep-work-date")?.value || getLocalDateString();
 }
 
-async function loadDailyEntry(today) {
-  try {
-    const entry = await getJson(`/api/daily-entries/${today}`);
-    setDeepWorkState(entry.deep_work_minutes, true, "Today's deep-work entry is already saved.");
-    return entry;
-  } catch (error) {
-    if (error.status === 404) {
-      setDeepWorkState(0, false);
-      return null;
+function setDeepWorkState(minutes, messageText = "") {
+  const display = document.getElementById("deep-work-value");
+  const message = document.getElementById("deep-work-message");
+  if (display && display.firstChild) {
+    display.firstChild.textContent = minutes === null ? "-- " : `${minutes} `;
+  }
+  if (message && messageText) message.textContent = messageText;
+}
+
+function renderDeepWorkSessions(summary) {
+  const list = document.getElementById("deep-work-sessions");
+  const count = document.getElementById("deep-work-session-count");
+  const totalLabel = document.getElementById("deep-work-total-label");
+  if (!list) return;
+
+  setDeepWorkState(summary.total_minutes);
+  if (count) count.textContent = `${summary.sessions.length} ${summary.sessions.length === 1 ? "session" : "sessions"}`;
+  if (totalLabel) totalLabel.textContent = `${summary.total_minutes} minutes total`;
+  list.replaceChildren();
+
+  if (summary.sessions.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "panel-description";
+    empty.textContent = summary.total_minutes > 0
+      ? `Legacy Deep Work total: ${summary.total_minutes} minutes. New sessions are stored separately.`
+      : "No Deep Work sessions for this date.";
+    list.append(empty);
+    setNote("deep-work-note", summary.total_minutes > 0
+      ? "Showing the legacy total because this date has no V2 sessions."
+      : "No deep-work recorded for this date.");
+    return;
+  }
+
+  setNote("deep-work-note", "V2 session total shown; legacy minutes are not added when sessions exist.");
+  summary.sessions.forEach((session) => {
+    const card = document.createElement("article");
+    card.className = "deep-work-session-card";
+    const heading = document.createElement("div");
+    heading.className = "deep-work-session-heading";
+    const category = document.createElement("strong");
+    category.textContent = session.category;
+    const duration = document.createElement("span");
+    duration.textContent = `${session.duration_minutes} min`;
+    heading.append(category, duration);
+    card.append(heading);
+
+    const details = document.createElement("p");
+    details.className = "deep-work-session-details";
+    details.textContent = session.started_at
+      ? `${new Date(session.started_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${session.ended_at ? ` to ${new Date(session.ended_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""} | ${session.source === "timer" ? "Timer" : "Manual"}`
+      : `Manual session | ${session.date}`;
+    card.append(details);
+    if (session.notes) {
+      const notes = document.createElement("p");
+      notes.className = "deep-work-session-notes";
+      notes.textContent = session.notes;
+      card.append(notes);
     }
-    setDeepWorkState(null, false, "Today's deep-work entry couldn't be loaded.");
+    list.append(card);
+  });
+}
+
+async function loadDailyDeepWork(requestedDate = selectedDeepWorkDate()) {
+  const list = document.getElementById("deep-work-sessions");
+  try {
+    const summary = await getJson(`/api/deep-work/daily/${requestedDate}`);
+    renderDeepWorkSessions(summary);
+    return summary;
+  } catch {
+    if (list) list.textContent = "Deep Work sessions couldn't be loaded. Check your connection and try again.";
+    setDeepWorkState(null, "Deep Work data couldn't be loaded.");
     return null;
   }
 }
 
-async function refreshAfterDeepWorkSave(today) {
+function updateTimerDisplay(timer) {
+  const display = document.getElementById("deep-work-timer-display");
+  const start = document.getElementById("deep-work-timer-start");
+  const stop = document.getElementById("deep-work-timer-stop");
+  const category = document.getElementById("deep-work-category");
+  if (!display || !start || !stop) return;
+  if (deepWorkTimerInterval) clearInterval(deepWorkTimerInterval);
+  deepWorkTimerInterval = null;
+
+  if (!timer) {
+    display.textContent = "00:00:00";
+    start.disabled = false;
+    stop.disabled = true;
+    if (category) category.disabled = false;
+    return;
+  }
+
+  if (category) {
+    category.value = timer.category;
+    category.disabled = true;
+  }
+  start.disabled = true;
+  stop.disabled = false;
+  const tick = () => {
+    const elapsed = Math.max(0, Math.floor((Date.now() - Date.parse(timer.started_at)) / 1000));
+    const hours = String(Math.floor(elapsed / 3600)).padStart(2, "0");
+    const minutes = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
+    const seconds = String(elapsed % 60).padStart(2, "0");
+    display.textContent = `${hours}:${minutes}:${seconds}`;
+  };
+  tick();
+  deepWorkTimerInterval = setInterval(tick, 1000);
+}
+
+async function loadDeepWorkCategories() {
+  const category = document.getElementById("deep-work-category");
+  const start = document.getElementById("deep-work-timer-start");
+  const save = document.getElementById("deep-work-save");
+  if (!category) return;
+  try {
+    const categories = await getJson("/api/deep-work/categories");
+    category.replaceChildren();
+    categories.forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      category.append(option);
+    });
+    if (start) start.disabled = categories.length === 0;
+    if (save) save.disabled = categories.length === 0;
+  } catch {
+    category.replaceChildren(new Option("Categories unavailable", ""));
+    category.disabled = true;
+    if (start) start.disabled = true;
+    if (save) save.disabled = true;
+    setDeepWorkState(null, "Deep Work categories couldn't be loaded.");
+  }
+}
+
+async function loadDeepWorkTimer() {
+  try {
+    const timer = await getJson("/api/deep-work/timer");
+    updateTimerDisplay(timer);
+    if (timer) setDeepWorkMessage(`Timer active for ${timer.category}.`);
+  } catch {
+    setDeepWorkMessage("The active timer couldn't be checked. Refresh to try again.");
+  }
+}
+
+function setDeepWorkMessage(message) {
+  const element = document.getElementById("deep-work-message");
+  if (element) element.textContent = message;
+}
+
+async function startDeepWorkTimer() {
+  const category = document.getElementById("deep-work-category")?.value;
+  const button = document.getElementById("deep-work-timer-start");
+  if (!category || !button) return;
+  button.disabled = true;
+  setDeepWorkMessage("");
+  try {
+    const response = await fetch("/api/deep-work/timer/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category })
+    });
+    if (!response.ok) throw new Error(response.status === 409 ? "A Deep Work timer is already active." : "The timer couldn't be started. Please try again.");
+    updateTimerDisplay(await response.json());
+    setDeepWorkMessage("Timer started. Stay focused; you can stop when your session is complete.");
+  } catch (error) {
+    button.disabled = false;
+    setDeepWorkMessage(error.message || "The timer couldn't be started. Check your connection and try again.");
+  }
+}
+
+async function refreshAfterDeepWorkSave(requestedDate) {
+  const today = getLocalDateString();
   const results = await Promise.allSettled([
-    getJson(`/api/daily-score/${today}`),
+    getJson(`/api/daily-score/${requestedDate}`),
     getJson("/api/placement-streak")
   ]);
   const [scoreResult, streakResult] = results;
-
-  if (scoreResult.status === "fulfilled") {
+  if (scoreResult.status === "fulfilled" && requestedDate === today) {
     setValueBeforeSuffix("daily-score-value", scoreResult.value.score);
     const ring = document.getElementById("daily-score-ring");
     if (ring) ring.textContent = scoreResult.value.score;
     setNote("daily-score-note", "Your effort, added up for today");
-  } else {
-    setValueBeforeSuffix("daily-score-value", "—");
-    setNote("daily-score-note", "Daily score couldn't be refreshed.");
   }
-
   if (streakResult.status === "fulfilled") {
-    setValueBeforeSuffix("placement-streak-value", streakResult.value.current_streak);
-    setNote("placement-streak-note", "Keep showing up, one day at a time");
+    setPlacementStreak(streakResult.value);
     updateSprintDay(streakResult.value.sprint_start, streakResult.value.sprint_end, today);
-  } else {
-    setValueBeforeSuffix("placement-streak-value", "—");
-    setNote("placement-streak-note", "Placement streak couldn't be refreshed.");
   }
 
-  await Promise.all([loadSprintAnalytics(), loadSprintHistory()]);
+  await Promise.all([
+    loadDailyDeepWork(selectedDeepWorkDate()),
+    loadSprintAnalytics(),
+    loadSprintHistory(),
+    loadPlacementDashboard()
+  ]);
+  if (scoreResult.status === "rejected" && requestedDate === today) {
+    setDeepWorkMessage("Session saved, but today's score couldn't be refreshed.");
+  }
+}
+
+async function stopDeepWorkTimer() {
+  const button = document.getElementById("deep-work-timer-stop");
+  if (!button) return;
+  button.disabled = true;
+  setDeepWorkMessage("");
+  try {
+    const response = await fetch("/api/deep-work/timer/stop", { method: "POST" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(response.status === 409 ? "There is no active timer to stop." : "The timer couldn't be stopped. Please try again.");
+    updateTimerDisplay(null);
+    setDeepWorkMessage(result.message);
+    if (result.completed && result.session) {
+      const dateInput = document.getElementById("deep-work-date");
+      if (dateInput) dateInput.value = result.session.date;
+      await refreshAfterDeepWorkSave(result.session.date);
+      setDeepWorkMessage(result.message);
+    } else {
+      button.disabled = true;
+    }
+  } catch (error) {
+    button.disabled = false;
+    setDeepWorkMessage(error.message || "The timer couldn't be stopped. Check your connection and try again.");
+  }
 }
 
 async function handleDeepWorkSubmit(event) {
   event.preventDefault();
   const input = document.getElementById("deep-work-minutes");
   const button = document.getElementById("deep-work-save");
-  const message = document.getElementById("deep-work-message");
-  const today = getLocalDateString();
+  const dateInput = document.getElementById("deep-work-date");
+  const today = selectedDeepWorkDate();
   if (!input || !button) return;
 
   const enteredMinutes = input.value.trim();
-  if (!/^\d+$/.test(enteredMinutes) || !Number.isSafeInteger(Number(enteredMinutes))) {
-    if (message) message.textContent = "Enter a whole number of minutes (0 or more).";
+  if (!/^\d+$/.test(enteredMinutes) || !Number.isSafeInteger(Number(enteredMinutes)) || Number(enteredMinutes) < 30) {
+    setDeepWorkMessage("Enter a whole number of at least 30 minutes per session.");
+    return;
+  }
+  if (!today || (dateInput && !dateInput.validity.valid)) {
+    setDeepWorkMessage("Choose a valid session date.");
     return;
   }
 
-  if (message) message.textContent = "";
   button.disabled = true;
+  setDeepWorkMessage("");
   try {
-    const response = await fetch("/api/daily-entries", {
+    const category = document.getElementById("deep-work-category")?.value;
+    if (!category) throw new Error("Choose a Deep Work category.");
+    const response = await fetch("/api/deep-work/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: today, deep_work_minutes: Number(enteredMinutes) })
+      body: JSON.stringify({
+        date: today,
+        duration_minutes: Number(enteredMinutes),
+        category,
+        notes: document.getElementById("deep-work-notes")?.value.trim() || null
+      })
     });
-    if (response.status === 409) {
-      await loadDailyEntry(today);
-      if (message) message.textContent = "Today's deep-work entry has already been saved.";
-      return;
-    }
     if (!response.ok) {
-      throw new Error("Couldn't save deep-work minutes. Please try again.");
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(response.status === 422
+        ? "The session was rejected. Check the date, category, and minimum 30-minute duration."
+        : payload.detail || "The Deep Work session couldn't be saved. Please try again.");
     }
-
-    setDeepWorkState(Number(enteredMinutes), true, "Deep work saved.");
-    setNote("deep-work-note", "Recorded deep-work time for today.");
+    input.value = "30";
+    document.getElementById("deep-work-notes").value = "";
+    setDeepWorkMessage("Deep Work session saved.");
     await refreshAfterDeepWorkSave(today);
   } catch (error) {
-    if (message) message.textContent = error.message;
+    setDeepWorkMessage(error.message || "The Deep Work session couldn't be saved. Check your connection and try again.");
   } finally {
-    if (button.dataset.saved !== "true") button.disabled = false;
+    button.disabled = false;
   }
 }
+
+async function initializeDeepWork() {
+  const dateInput = document.getElementById("deep-work-date");
+  if (dateInput) {
+    dateInput.value = getLocalDateString();
+    dateInput.addEventListener("change", () => void loadDailyDeepWork(selectedDeepWorkDate()));
+  }
+  document.getElementById("deep-work-form")?.addEventListener("submit", handleDeepWorkSubmit);
+  document.getElementById("deep-work-timer-start")?.addEventListener("click", () => void startDeepWorkTimer());
+  document.getElementById("deep-work-timer-stop")?.addEventListener("click", () => void stopDeepWorkTimer());
+  await loadDeepWorkCategories();
+  await Promise.all([loadDailyDeepWork(getLocalDateString()), loadDeepWorkTimer()]);
+}
+
 async function loadDashboard() {
   const today = getLocalDateString();
   void loadMits(today);
   void loadReflection(today);
   void loadSprintHistory();
   void loadSprintAnalytics();
-  document.getElementById("deep-work-form")?.addEventListener("submit", handleDeepWorkSubmit);
+  void initializeDeepWork();
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
     getJson(`/api/daily-score/${today}`),
-    getJson("/api/placement-streak"),
-    getJson(`/api/daily-entries/${today}`)
+    getJson("/api/placement-streak")
   ]);
 
-  const [habitsResult, scoreResult, streakResult, entryResult] = results;
+  const [habitsResult, scoreResult, streakResult] = results;
 
   if (scoreResult.status === "fulfilled") {
     const score = scoreResult.value.score;
@@ -549,22 +748,11 @@ async function loadDashboard() {
   }
 
   if (streakResult.status === "fulfilled") {
-    setValueBeforeSuffix("placement-streak-value", streakResult.value.current_streak);
+    setPlacementStreak(streakResult.value);
     updateSprintDay(streakResult.value.sprint_start, streakResult.value.sprint_end, today);
   } else {
     setValueBeforeSuffix("placement-streak-value", "—");
     setNote("placement-streak-note", "Placement streak couldn't be loaded.");
-  }
-
-  if (entryResult.status === "fulfilled") {
-    setDeepWorkState(entryResult.value.deep_work_minutes, true, "Today's deep-work entry is already saved.");
-    setNote("deep-work-note", "Recorded deep-work time for today.");
-  } else if (entryResult.reason.status === 404) {
-    setDeepWorkState(0, false);
-    setNote("deep-work-note", "No daily entry for today.");
-  } else {
-    setDeepWorkState(null, false, "Today's deep-work entry couldn't be loaded.");
-    setNote("deep-work-note", "Deep-work time couldn't be loaded.");
   }
 
   if (habitsResult.status === "fulfilled" && Array.isArray(habitsResult.value)) {
@@ -575,8 +763,975 @@ async function loadDashboard() {
   }
 }
 
+
+function formatMinutes(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours && remainder) return `${hours}h ${remainder}m`;
+  if (hours) return `${hours}h`;
+  return `${remainder}m`;
+}
+
+function createTextElement(tagName, className, text) {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  element.textContent = String(text);
+  return element;
+}
+
+function renderDashboardList(containerId, entries, emptyMessage, renderEntry) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.replaceChildren();
+  if (!entries.length) {
+    container.append(createTextElement("p", "panel-description", emptyMessage));
+    return;
+  }
+  entries.forEach((entry) => container.append(renderEntry(entry)));
+}
+
+function renderPlacementDashboard(data) {
+  const goal = document.getElementById("dashboard-goal-value");
+  const goalInput = document.getElementById("dashboard-goal-input");
+  const targetInput = document.getElementById("dashboard-target-input");
+  if (goal) goal.textContent = data.goal;
+  if (goalInput && document.activeElement !== goalInput) goalInput.value = data.goal;
+  if (targetInput && document.activeElement !== targetInput) {
+    targetInput.value = String(data.deep_work.daily.target_minutes);
+  }
+
+  const active = document.getElementById("dashboard-active-applications");
+  if (active) active.textContent = String(data.applications.active);
+  const prepPercent = document.getElementById("dashboard-preparation-percent");
+  if (prepPercent) prepPercent.textContent = `${data.preparation.completion_percentage}%`;
+  const prepCount = document.getElementById("dashboard-preparation-count");
+  if (prepCount) prepCount.textContent = `${data.preparation.completed}/${data.preparation.total_topics} topics completed`;
+
+  const daily = data.deep_work.daily;
+  const deepPercent = document.getElementById("dashboard-deep-work-percent");
+  if (deepPercent) deepPercent.textContent = `${daily.progress_percentage}%`;
+  const deepActual = document.getElementById("dashboard-deep-work-actual");
+  if (deepActual) deepActual.textContent = `${formatMinutes(daily.actual_minutes)} of ${formatMinutes(daily.target_minutes)}`;
+  const dailyText = document.getElementById("dashboard-deep-work-daily-text");
+  if (dailyText) dailyText.textContent = `${formatMinutes(daily.actual_minutes)} / ${formatMinutes(daily.target_minutes)}`;
+  const dailyProgress = document.getElementById("dashboard-deep-work-daily-progress");
+  if (dailyProgress) dailyProgress.textContent = `${daily.progress_percentage}% progress`;
+  const dailyBar = document.getElementById("dashboard-deep-work-daily-bar");
+  if (dailyBar) dailyBar.style.width = `${Math.min(daily.progress_percentage, 100)}%`;
+
+  const weekly = data.deep_work.weekly;
+  const weeklyText = document.getElementById("dashboard-deep-work-weekly-text");
+  if (weeklyText) weeklyText.textContent = `${formatMinutes(weekly.actual_minutes)} / ${formatMinutes(weekly.target_minutes)}`;
+  const weeklyProgress = document.getElementById("dashboard-deep-work-weekly-progress");
+  if (weeklyProgress) weeklyProgress.textContent = `${weekly.progress_percentage}% progress · Monday to today`;
+  const weeklyBar = document.getElementById("dashboard-deep-work-weekly-bar");
+  if (weeklyBar) weeklyBar.style.width = `${Math.min(weekly.progress_percentage, 100)}%`;
+
+  const pipelineList = document.getElementById("dashboard-pipeline-list");
+  if (pipelineList) {
+    pipelineList.replaceChildren();
+    Object.entries(data.applications.pipeline).forEach(([status, count]) => {
+      const item = document.createElement("div");
+      item.className = "pipeline-item";
+      item.append(createTextElement("span", "", status), createTextElement("strong", "", count));
+      pipelineList.append(item);
+    });
+  }
+
+  const deadlineContainer = document.getElementById("dashboard-next-deadline");
+  if (deadlineContainer) {
+    deadlineContainer.replaceChildren();
+    if (data.next_deadline) {
+      deadlineContainer.append(
+        createTextElement("p", "deadline-company", data.next_deadline.company),
+        createTextElement("p", "deadline-role", data.next_deadline.role),
+        createTextElement("span", "deadline-date", data.next_deadline.deadline)
+      );
+    } else {
+      deadlineContainer.append(createTextElement("p", "panel-description", "No upcoming deadlines."));
+    }
+  }
+
+  const prep = data.preparation;
+  const progressValues = {
+    "preparation-total-topics": prep.total_topics,
+    "preparation-completed-topics": prep.completed,
+    "preparation-in-progress-topics": prep.in_progress,
+    "preparation-not-started-topics": prep.not_started,
+    "preparation-total-practices": prep.total_practice_count,
+    "preparation-completion-percent": `${prep.completion_percentage}%`
+  };
+  Object.entries(progressValues).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value);
+  });
+  const completionBar = document.getElementById("preparation-completion-bar");
+  if (completionBar) completionBar.style.width = `${Math.min(prep.completion_percentage, 100)}%`;
+  const prepSummary = document.getElementById("dashboard-preparation-summary");
+  if (prepSummary) {
+    prepSummary.textContent = `${prep.completed} completed · ${prep.in_progress} in progress · ${prep.not_started} not started`;
+  }
+  const practiceCount = document.getElementById("dashboard-practice-count");
+  if (practiceCount) practiceCount.textContent = `${prep.total_practice_count} practices`;
+  const categoryList = document.getElementById("dashboard-category-progress");
+  if (categoryList) {
+    categoryList.replaceChildren();
+    prep.categories.forEach((category) => {
+      const row = document.createElement("div");
+      row.className = "category-progress-row";
+      row.append(createTextElement("span", "", category.category));
+      const track = document.createElement("div");
+      track.className = "category-progress-track";
+      const bar = document.createElement("span");
+      bar.style.width = `${Math.min(category.completion_percentage, 100)}%`;
+      track.append(bar);
+      row.append(track, createTextElement("strong", "", `${category.completion_percentage}%`));
+      categoryList.append(row);
+    });
+  }
+
+  renderDashboardList("dashboard-mits-list", data.today.mits, "No MITs added for today.", (mit) => {
+    const row = createTextElement("div", "focus-row", mit.task);
+    if (mit.completed) row.append(createTextElement("small", "", "Completed"));
+    return row;
+  });
+  renderDashboardList("dashboard-incomplete-topics", data.today.incomplete_topics, "No incomplete preparation topics.", (topic) => {
+    const row = createTextElement("div", "focus-row", topic.name);
+    row.append(createTextElement("small", "", `${topic.category} · ${topic.status}`));
+    return row;
+  });
+}
+
+async function loadPlacementDashboard() {
+  const message = document.getElementById("dashboard-load-message");
+  try {
+    const data = await getJson("/api/dashboard");
+    renderPlacementDashboard(data);
+    if (message) {
+      message.hidden = true;
+      message.textContent = "";
+    }
+    return data;
+  } catch {
+    if (message) {
+      message.hidden = false;
+      message.textContent = "Placement dashboard data couldn't be loaded. Try refreshing the page.";
+    }
+    return null;
+  }
+}
+
+async function saveDashboardSetting(payload, messageId) {
+  const message = document.getElementById(messageId);
+  if (message) message.textContent = "";
+  try {
+    const response = await fetch("/api/dashboard/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error("Couldn't save this dashboard setting.");
+    await loadPlacementDashboard();
+    if (message) message.textContent = "Setting saved.";
+  } catch (error) {
+    if (message) message.textContent = error.message;
+  }
+}
+
+function handleDashboardGoalSubmit(event) {
+  event.preventDefault();
+  const input = document.getElementById("dashboard-goal-input");
+  if (input && input.value.trim()) {
+    void saveDashboardSetting({ goal: input.value.trim() }, "dashboard-goal-message");
+  }
+}
+
+function handleDashboardTargetSubmit(event) {
+  event.preventDefault();
+  const input = document.getElementById("dashboard-target-input");
+  if (!input || !input.reportValidity()) return;
+  void saveDashboardSetting(
+    { daily_deep_work_target_minutes: Number(input.value) },
+    "dashboard-target-message"
+  );
+}
+
+const OPPORTUNITY_STATUSES = [
+  "Interested", "Applied", "Assessment", "Interview", "HR",
+  "Selected", "Rejected", "Withdrawn", "Not Eligible", "Expired"
+];
+let opportunities = [];
+let editingOpportunityId = null;
+
+function opportunityFormPayload() {
+  const value = (id) => document.getElementById(id).value.trim();
+  return {
+    company: value("opportunity-company"),
+    role: value("opportunity-role"),
+    location: value("opportunity-location") || null,
+    source: value("opportunity-source") || null,
+    job_link: value("opportunity-job-link") || null,
+    status: document.getElementById("opportunity-status").value,
+    priority: document.getElementById("opportunity-priority").value,
+    ctc: value("opportunity-ctc") || null,
+    deadline: document.getElementById("opportunity-deadline").value || null,
+    referral: value("opportunity-referral") || null,
+    eligibility: value("opportunity-eligibility") || null,
+    requirements: value("opportunity-requirements") || null,
+    notes: value("opportunity-notes") || null,
+    is_serious: document.getElementById("opportunity-serious").checked
+  };
+}
+
+function resetOpportunityForm() {
+  document.getElementById("opportunity-form").reset();
+  document.getElementById("opportunity-form-title").textContent = "Add an opportunity";
+  document.getElementById("opportunity-save-button").textContent = "Save opportunity";
+  document.getElementById("opportunity-cancel-edit").hidden = true;
+  document.getElementById("opportunity-message").textContent = "";
+  editingOpportunityId = null;
+}
+
+function beginOpportunityEdit(opportunity) {
+  editingOpportunityId = opportunity.id;
+  document.getElementById("opportunity-form-title").textContent = "Edit opportunity";
+  document.getElementById("opportunity-save-button").textContent = "Save changes";
+  document.getElementById("opportunity-cancel-edit").hidden = false;
+  const values = {
+    "opportunity-company": opportunity.company,
+    "opportunity-role": opportunity.role,
+    "opportunity-location": opportunity.location || "",
+    "opportunity-source": opportunity.source || "",
+    "opportunity-job-link": opportunity.job_link || "",
+    "opportunity-status": opportunity.status,
+    "opportunity-priority": opportunity.priority,
+    "opportunity-ctc": opportunity.ctc || "",
+    "opportunity-deadline": opportunity.deadline || "",
+    "opportunity-referral": opportunity.referral || "",
+    "opportunity-eligibility": opportunity.eligibility || "",
+    "opportunity-requirements": opportunity.requirements || "",
+    "opportunity-notes": opportunity.notes || "",
+    "opportunity-serious": Boolean(opportunity.is_serious)
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const input = document.getElementById(id);
+    if (id === "opportunity-serious") input.checked = value;
+    else input.value = value;
+  });
+  document.getElementById("opportunity-management").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function appendOpportunityDetail(card, label, value) {
+  if (!value) return;
+  const detail = document.createElement("p");
+  detail.className = "opportunity-card-detail";
+  const name = document.createElement("strong");
+  name.textContent = `${label}: `;
+  detail.append(name, document.createTextNode(value));
+  card.append(detail);
+}
+
+function opportunityStatusSelect(opportunity) {
+  const select = document.createElement("select");
+  select.className = "opportunity-status-select";
+  select.setAttribute("aria-label", `Status for ${opportunity.company} ${opportunity.role}`);
+  OPPORTUNITY_STATUSES.forEach((status) => {
+    const option = document.createElement("option");
+    option.value = status;
+    option.textContent = status;
+    option.selected = status === opportunity.status;
+    select.append(option);
+  });
+  select.addEventListener("change", () => {
+    const previousStatus = opportunity.status;
+    void updateOpportunity(opportunity.id, { status: select.value }, "Opportunity status updated.")
+      .catch((error) => {
+        select.value = previousStatus;
+        setOpportunityListMessage(error.message || "Couldn't update opportunity status.");
+      });
+  });
+  return select;
+}
+
+function renderOpportunityCard(opportunity, container) {
+  const card = document.createElement("article");
+  card.className = "opportunity-card";
+  const heading = document.createElement("h4");
+  heading.textContent = opportunity.company;
+  card.append(heading);
+  const role = document.createElement("p");
+  role.className = "opportunity-card-role";
+  role.textContent = opportunity.role;
+  card.append(role);
+
+  const badges = document.createElement("div");
+  badges.className = "opportunity-card-meta";
+  const seriousBadge = document.createElement("span");
+  seriousBadge.className = `opportunity-badge${opportunity.is_serious ? " serious" : ""}`;
+  seriousBadge.textContent = opportunity.is_serious ? "Serious Application" : "Inbox";
+  const priorityBadge = document.createElement("span");
+  priorityBadge.className = `opportunity-badge${opportunity.priority === "High" ? " priority-high" : opportunity.priority === "Low" ? " priority-low" : ""}`;
+  priorityBadge.textContent = `${opportunity.priority} priority`;
+  badges.append(seriousBadge, priorityBadge, opportunityStatusSelect(opportunity));
+  if (opportunity.location) badges.append(createTextElement("span", "opportunity-badge", opportunity.location));
+  if (opportunity.deadline) badges.append(createTextElement("span", "opportunity-badge", `Deadline ${opportunity.deadline}`));
+  card.append(badges);
+
+  const sourceDetails = [
+    ["Source", opportunity.source], ["CTC", opportunity.ctc],
+    ["Referral", opportunity.referral], ["Eligibility", opportunity.eligibility],
+    ["Requirements", opportunity.requirements], ["Notes", opportunity.notes]
+  ];
+  sourceDetails.forEach(([label, value]) => appendOpportunityDetail(card, label, value));
+
+  if (opportunity.job_link) {
+    try {
+      const linkUrl = new URL(opportunity.job_link, window.location.origin);
+      if (linkUrl.protocol === "http:" || linkUrl.protocol === "https:") {
+        const link = document.createElement("a");
+        link.className = "opportunity-card-link";
+        link.href = linkUrl.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Open job link";
+        card.append(link);
+      }
+    } catch { /* Ignore malformed optional links. */ }
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "opportunity-card-actions";
+  const seriousButton = document.createElement("button");
+  seriousButton.type = "button";
+  seriousButton.className = "secondary-button";
+  seriousButton.textContent = opportunity.is_serious ? "Move to inbox" : "Mark serious";
+  seriousButton.addEventListener("click", () => {
+    void updateOpportunity(
+      opportunity.id,
+      { is_serious: !opportunity.is_serious },
+      opportunity.is_serious ? "Moved to Opportunity Inbox." : "Promoted to Serious Applications."
+    ).catch((error) => setOpportunityListMessage(error.message || "Couldn't update this opportunity."));
+  });
+
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.className = "secondary-button";
+  editButton.textContent = "Edit";
+  editButton.addEventListener("click", () => beginOpportunityEdit(opportunity));
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "delete-button";
+  deleteButton.textContent = "Delete";
+  deleteButton.addEventListener("click", () => void deleteOpportunity(opportunity));
+  actions.append(seriousButton, editButton, deleteButton);
+  card.append(actions);
+  container.append(card);
+}
+
+function setOpportunityListMessage(message) {
+  const element = document.getElementById("opportunity-list-message");
+  if (element) element.textContent = message;
+}
+
+function renderOpportunityLists() {
+  const inbox = document.getElementById("opportunity-inbox-list");
+  const serious = document.getElementById("opportunity-serious-list");
+  const statusFilter = document.getElementById("opportunity-filter-status").value;
+  const priorityFilter = document.getElementById("opportunity-filter-priority").value;
+  const seriousFilter = document.getElementById("opportunity-filter-serious").value;
+  const filtered = opportunities.filter((item) =>
+    (!statusFilter || item.status === statusFilter)
+    && (!priorityFilter || item.priority === priorityFilter)
+    && (seriousFilter === "" || String(item.is_serious) === seriousFilter)
+  );
+  const inboxItems = filtered.filter((item) => !item.is_serious);
+  const seriousItems = filtered.filter((item) => item.is_serious);
+  document.getElementById("opportunity-inbox-count").textContent = String(inboxItems.length);
+  document.getElementById("opportunity-serious-count").textContent = String(seriousItems.length);
+  inbox.replaceChildren();
+  serious.replaceChildren();
+  if (inboxItems.length === 0) {
+    inbox.textContent = opportunities.length === 0 ? "No opportunities added yet." : "No inbox opportunities match these filters.";
+  } else {
+    inboxItems.forEach((item) => renderOpportunityCard(item, inbox));
+  }
+  if (seriousItems.length === 0) {
+    serious.textContent = opportunities.length === 0 ? "No serious applications yet." : "No serious applications match these filters.";
+  } else {
+    seriousItems.forEach((item) => renderOpportunityCard(item, serious));
+  }
+}
+
+async function loadOpportunities() {
+  try {
+    opportunities = await requestApi("/api/opportunities");
+    renderOpportunityLists();
+  } catch (error) {
+    document.getElementById("opportunity-inbox-list").textContent = "Opportunities couldn't be loaded.";
+    document.getElementById("opportunity-serious-list").textContent = "Serious applications couldn't be loaded.";
+    setOpportunityListMessage(error.message || "Couldn't load opportunities. Please try again.");
+  }
+}
+
+async function updateOpportunity(opportunityId, changes, successMessage) {
+  await requestApi(`/api/opportunities/${opportunityId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes)
+  });
+  await Promise.all([loadOpportunities(), loadPlacementDashboard()]);
+  setOpportunityListMessage(successMessage);
+}
+
+async function deleteOpportunity(opportunity) {
+  const confirmed = window.confirm(`Delete ${opportunity.company} ? ${opportunity.role}? This cannot be undone.`);
+  if (!confirmed) return;
+  try {
+    await requestApi(`/api/opportunities/${opportunity.id}`, { method: "DELETE" });
+    if (editingOpportunityId === opportunity.id) resetOpportunityForm();
+    await Promise.all([loadOpportunities(), loadPlacementDashboard()]);
+    setOpportunityListMessage("Opportunity deleted.");
+  } catch (error) {
+    setOpportunityListMessage(error.message || "Couldn't delete this opportunity.");
+  }
+}
+
+async function handleOpportunitySubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const method = editingOpportunityId === null ? "POST" : "PUT";
+  const path = editingOpportunityId === null
+    ? "/api/opportunities"
+    : `/api/opportunities/${editingOpportunityId}`;
+  const message = document.getElementById("opportunity-message");
+  const button = document.getElementById("opportunity-save-button");
+  button.disabled = true;
+  if (message) message.textContent = "";
+  try {
+    await requestApi(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opportunityFormPayload())
+    });
+    resetOpportunityForm();
+    if (message) message.textContent = method === "POST" ? "Opportunity added." : "Opportunity updated.";
+    setOpportunityListMessage("");
+    await Promise.all([loadOpportunities(), loadPlacementDashboard()]);
+  } catch (error) {
+    if (message) {
+      message.textContent = error.status === 422
+        ? "Check the required fields and selected values, then try again."
+        : error.message || "Couldn't save this opportunity.";
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function opportunityFiltersChanged() {
+  renderOpportunityLists();
+}
+
+let preparationCategories = [];
+let preparationTopics = [];
+let editingPreparationTopicId = null;
+
+function populatePreparationCategoryControls() {
+  const categoryInput = document.getElementById("preparation-category");
+  const categoryFilter = document.getElementById("preparation-filter-category");
+  const selectedCategory = categoryInput.value;
+  const selectedFilter = categoryFilter.value;
+  categoryInput.replaceChildren(createTextElement("option", "", "Select a category"));
+  categoryInput.options[0].value = "";
+  categoryFilter.replaceChildren(createTextElement("option", "", "All categories"));
+  categoryFilter.options[0].value = "";
+
+  preparationCategories.forEach((category) => {
+    const formOption = createTextElement("option", "", category.name);
+    formOption.value = String(category.id);
+    categoryInput.append(formOption);
+    const filterOption = createTextElement("option", "", category.name);
+    filterOption.value = String(category.id);
+    categoryFilter.append(filterOption);
+  });
+  if (preparationCategories.some((category) => String(category.id) === selectedCategory)) {
+    categoryInput.value = selectedCategory;
+  }
+  if (preparationCategories.some((category) => String(category.id) === selectedFilter)) {
+    categoryFilter.value = selectedFilter;
+  }
+
+  const statusFilter = document.getElementById("preparation-filter-status");
+  if (statusFilter.options.length === 1) {
+    Array.from(document.getElementById("preparation-status").options).forEach((status) => {
+      const option = createTextElement("option", "", status.textContent);
+      option.value = status.value;
+      statusFilter.append(option);
+    });
+  }
+  categoryInput.disabled = preparationCategories.length === 0;
+  document.getElementById("preparation-save-button").disabled = preparationCategories.length === 0;
+}
+
+function resetPreparationForm() {
+  document.getElementById("preparation-form").reset();
+  document.getElementById("preparation-form-title").textContent = "Add a topic";
+  document.getElementById("preparation-save-button").textContent = "Save topic";
+  document.getElementById("preparation-cancel-edit").hidden = true;
+  document.getElementById("preparation-form-message").textContent = "";
+  editingPreparationTopicId = null;
+}
+
+function beginPreparationEdit(topic) {
+  editingPreparationTopicId = topic.id;
+  document.getElementById("preparation-form-title").textContent = "Edit topic";
+  document.getElementById("preparation-save-button").textContent = "Save changes";
+  document.getElementById("preparation-cancel-edit").hidden = false;
+  document.getElementById("preparation-category").value = String(topic.category_id);
+  document.getElementById("preparation-name").value = topic.name;
+  document.getElementById("preparation-status").value = topic.status;
+  document.getElementById("preparation-notes").value = topic.notes || "";
+  document.getElementById("preparation-management").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function setPreparationListMessage(message) {
+  document.getElementById("preparation-list-message").textContent = message;
+}
+
+function renderPreparationTopics() {
+  const container = document.getElementById("preparation-topic-groups");
+  const categoryFilter = document.getElementById("preparation-filter-category").value;
+  const statusFilter = document.getElementById("preparation-filter-status").value;
+  const filtered = preparationTopics.filter((topic) =>
+    (!categoryFilter || String(topic.category_id) === categoryFilter)
+    && (!statusFilter || topic.status === statusFilter)
+  );
+  container.replaceChildren();
+  if (preparationCategories.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "panel-description";
+    empty.textContent = "No preparation categories are available.";
+    container.append(empty);
+    return;
+  }
+  if (filtered.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "panel-description";
+    empty.textContent = preparationTopics.length === 0
+      ? "No topics yet. Add a topic above to start your preparation plan."
+      : "No topics match these filters.";
+    container.append(empty);
+    return;
+  }
+
+  preparationCategories.forEach((category) => {
+    const items = filtered.filter((topic) => topic.category_id === category.id);
+    if (items.length === 0) return;
+    const group = document.createElement("section");
+    group.className = "preparation-topic-group";
+    const heading = document.createElement("div");
+    heading.className = "preparation-topic-group-heading";
+    heading.append(
+      createTextElement("h3", "", category.name),
+      createTextElement("span", "count-pill", `${items.length} ${items.length === 1 ? "topic" : "topics"}`)
+    );
+    const list = document.createElement("div");
+    list.className = "preparation-topic-list";
+    items.forEach((topic) => {
+      const card = document.createElement("article");
+      card.className = "preparation-topic-card";
+      card.append(createTextElement("h4", "", topic.name));
+      const meta = document.createElement("div");
+      meta.className = "preparation-topic-meta";
+      const statusClass = topic.status === "Completed"
+        ? "completed"
+        : topic.status === "In Progress" ? "in-progress" : "";
+      meta.append(
+        createTextElement("span", `preparation-topic-status ${statusClass}`, topic.status),
+        createTextElement("span", "", `${topic.practice_count} ${topic.practice_count === 1 ? "practice" : "practices"}`)
+      );
+      card.append(meta);
+      if (topic.notes) card.append(createTextElement("p", "preparation-topic-notes", topic.notes));
+
+      const actions = document.createElement("div");
+      actions.className = "opportunity-card-actions";
+      const practice = document.createElement("button");
+      practice.type = "button";
+      practice.textContent = "Practice";
+      practice.addEventListener("click", () => void recordPreparationPractice(topic.id));
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "secondary-button";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => beginPreparationEdit(topic));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "delete-button";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", () => void deletePreparationTopic(topic));
+      actions.append(practice, edit, remove);
+      card.append(actions);
+      list.append(card);
+    });
+    group.append(heading, list);
+    container.append(group);
+  });
+}
+
+async function loadPreparation() {
+  try {
+    const [categories, topics] = await Promise.all([
+      requestApi("/api/preparation/categories"),
+      requestApi("/api/preparation/topics")
+    ]);
+    preparationCategories = categories;
+    preparationTopics = topics;
+    populatePreparationCategoryControls();
+    renderPreparationTopics();
+  } catch (error) {
+    document.getElementById("preparation-topic-groups").textContent =
+      "Preparation topics couldn't be loaded. Please try again.";
+    setPreparationListMessage(error.message || "Preparation data couldn't be loaded.");
+  }
+}
+
+async function refreshPreparationViews(message) {
+  await Promise.all([loadPreparation(), loadPlacementDashboard()]);
+  setPreparationListMessage(message);
+}
+
+async function handlePreparationSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const method = editingPreparationTopicId === null ? "POST" : "PUT";
+  const path = editingPreparationTopicId === null
+    ? "/api/preparation/topics"
+    : `/api/preparation/topics/${editingPreparationTopicId}`;
+  const payload = {
+    category_id: Number(document.getElementById("preparation-category").value),
+    name: document.getElementById("preparation-name").value.trim(),
+    status: document.getElementById("preparation-status").value,
+    notes: document.getElementById("preparation-notes").value
+  };
+  const button = document.getElementById("preparation-save-button");
+  const message = document.getElementById("preparation-form-message");
+  button.disabled = true;
+  message.textContent = "";
+  try {
+    await requestApi(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    resetPreparationForm();
+    message.textContent = method === "POST" ? "Topic added." : "Topic updated.";
+    await Promise.all([loadPreparation(), loadPlacementDashboard()]);
+  } catch (error) {
+    message.textContent = error.status === 422
+      ? "Check the category, topic name, and status, then try again."
+      : error.message || "Couldn't save this topic.";
+  } finally {
+    button.disabled = preparationCategories.length === 0;
+  }
+}
+
+async function recordPreparationPractice(topicId) {
+  try {
+    await requestApi(`/api/preparation/topics/${topicId}/practice`, { method: "POST" });
+    await refreshPreparationViews("Practice recorded. Count updated.");
+  } catch (error) {
+    setPreparationListMessage(error.message || "Couldn't record practice.");
+  }
+}
+
+async function deletePreparationTopic(topic) {
+  if (!window.confirm(`Delete ${topic.name}? This cannot be undone.`)) return;
+  try {
+    await requestApi(`/api/preparation/topics/${topic.id}`, { method: "DELETE" });
+    if (editingPreparationTopicId === topic.id) resetPreparationForm();
+    await refreshPreparationViews("Topic deleted.");
+  } catch (error) {
+    setPreparationListMessage(error.message || "Couldn't delete this topic.");
+  }
+}
+
+function preparationFiltersChanged() {
+  renderPreparationTopics();
+}
+
+let editingPerformanceEntryId = null;
+let performanceOptionsLoaded = false;
+
+async function requestApi(path, options = {}) {
+  const response = await fetch(path, options);
+  if (!response.ok) {
+    let detail = `Request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch { /* Keep the readable status fallback. */ }
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+function setPerformanceMessage(message) {
+  const element = document.getElementById("performance-message");
+  if (element) element.textContent = message;
+}
+
+function performanceFormPayload() {
+  const opportunityId = document.getElementById("performance-opportunity").value;
+  const topicId = document.getElementById("performance-topic").value;
+  const payload = {
+    date: document.getElementById("performance-date").value,
+    type: document.getElementById("performance-type").value,
+    performance: document.getElementById("performance-level").value,
+    opportunity_id: opportunityId ? Number(opportunityId) : null,
+    preparation_topic_id: topicId ? Number(topicId) : null,
+    questions: document.getElementById("performance-questions").value,
+    couldnt_answer: document.getElementById("performance-couldnt-answer").value,
+    what_learned: document.getElementById("performance-what-learned").value,
+    action_items: document.getElementById("performance-action-items").value,
+    notes: document.getElementById("performance-notes").value
+  };
+  if (!opportunityId) {
+    payload.company = document.getElementById("performance-company").value.trim() || null;
+    payload.role = document.getElementById("performance-role").value.trim() || null;
+  }
+  return payload;
+}
+
+function resetPerformanceForm() {
+  const form = document.getElementById("performance-entry-form");
+  form.reset();
+  document.getElementById("performance-date").value = getLocalDateString();
+  document.getElementById("performance-form-title").textContent = "Record an experience";
+  document.getElementById("performance-save-button").textContent = "Save Entry";
+  document.getElementById("performance-cancel-edit").hidden = true;
+  editingPerformanceEntryId = null;
+}
+
+async function handlePerformanceSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const method = editingPerformanceEntryId === null ? "POST" : "PUT";
+  const path = editingPerformanceEntryId === null
+    ? "/api/performance"
+    : `/api/performance/${editingPerformanceEntryId}`;
+  try {
+    await requestApi(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(performanceFormPayload())
+    });
+    resetPerformanceForm();
+    setPerformanceMessage(method === "POST" ? "Journal entry saved." : "Journal entry updated.");
+    await Promise.all([loadPerformanceEntries(), loadPerformanceSummary()]);
+  } catch (error) {
+    setPerformanceMessage(error.message || "Couldn't save this journal entry.");
+  }
+}
+
+function renderPerformanceEntries(entries) {
+  const list = document.getElementById("performance-entry-list");
+  if (!list) return;
+  list.replaceChildren();
+  if (entries.length === 0) {
+    list.textContent = "No performance entries match these filters.";
+    return;
+  }
+  entries.forEach((entry) => {
+    const card = document.createElement("article");
+    card.className = "performance-entry-card";
+    const title = document.createElement("h4");
+    title.textContent = `${entry.type} \u2014 ${entry.performance}`;
+    const badge = document.createElement("span");
+    badge.className = "performance-entry-badge";
+    badge.textContent = entry.date;
+    title.append(badge);
+    card.append(title);
+    const identity = [entry.company, entry.role].filter(Boolean).join(" \u00b7 ");
+    const meta = document.createElement("p");
+    meta.className = "performance-entry-meta";
+    meta.textContent = identity || "Personal practice";
+    card.append(meta);
+    const fields = [
+      ["Questions", entry.questions],
+      ["Couldn't answer", entry.couldnt_answer],
+      ["What I learned", entry.what_learned],
+      ["Action items", entry.action_items],
+      ["Notes", entry.notes]
+    ];
+    fields.forEach(([label, value]) => {
+      if (!value) return;
+      const field = document.createElement("p");
+      field.className = "performance-entry-field";
+      const strong = document.createElement("strong");
+      strong.textContent = `${label}: `;
+      field.append(strong, document.createTextNode(value));
+      card.append(field);
+    });
+    const links = [];
+    if (entry.preparation_topic_name) {
+      links.push(entry.preparation_category
+        ? `${entry.preparation_category} \u2192 ${entry.preparation_topic_name}`
+        : entry.preparation_topic_name);
+    }
+    if (entry.opportunity_id) links.push("Linked opportunity");
+    if (links.length) {
+      const linkNote = document.createElement("p");
+      linkNote.className = "performance-entry-links";
+      linkNote.textContent = links.join(" \u00b7 ");
+      card.append(linkNote);
+    }
+    const actions = document.createElement("div");
+    actions.className = "performance-entry-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "secondary-button";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => beginPerformanceEdit(entry));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "delete-button";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => void deletePerformanceEntry(entry.id));
+    actions.append(edit, remove);
+    card.append(actions);
+    list.append(card);
+  });
+}
+
+async function loadPerformanceEntries() {
+  const list = document.getElementById("performance-entry-list");
+  if (!list) return;
+  const params = new URLSearchParams();
+  const filters = [
+    ["type", "performance-filter-type"],
+    ["performance", "performance-filter-level"],
+    ["company", "performance-filter-company"],
+    ["date", "performance-filter-date"]
+  ];
+  filters.forEach(([key, id]) => {
+    const value = document.getElementById(id)?.value.trim();
+    if (value) params.set(key, value);
+  });
+  try {
+    const entries = await getJson(`/api/performance${params.size ? `?${params}` : ""}`);
+    renderPerformanceEntries(entries);
+  } catch {
+    list.textContent = "Performance entries couldn't be loaded. Try refreshing the page.";
+  }
+}
+
+async function loadPerformanceSummary() {
+  try {
+    const summary = await getJson("/api/performance/summary");
+    document.getElementById("performance-total").textContent = `${summary.total} ${summary.total === 1 ? "entry" : "entries"}`;
+    document.getElementById("performance-summary-levels").textContent =
+      `Good ${summary.by_performance.Good} \u00b7 Mixed ${summary.by_performance.Mixed} \u00b7 Poor ${summary.by_performance.Poor}`;
+  } catch {
+    document.getElementById("performance-summary-levels").textContent = "Summary couldn't be loaded.";
+  }
+}
+
+async function loadPerformanceOptions() {
+  if (performanceOptionsLoaded) return;
+  const [opportunities, topics] = await Promise.all([
+    getJson("/api/opportunities"),
+    getJson("/api/preparation/topics")
+  ]);
+  const opportunitySelect = document.getElementById("performance-opportunity");
+  opportunities.forEach((opportunity) => {
+    const option = document.createElement("option");
+    option.value = opportunity.id;
+    option.textContent = `${opportunity.company} \u2014 ${opportunity.role}`;
+    opportunitySelect.append(option);
+  });
+  const topicSelect = document.getElementById("performance-topic");
+  topics.forEach((topic) => {
+    const option = document.createElement("option");
+    option.value = topic.id;
+    option.textContent = `${topic.category} \u2192 ${topic.name}`;
+    topicSelect.append(option);
+  });
+  performanceOptionsLoaded = true;
+}
+
+function beginPerformanceEdit(entry) {
+  editingPerformanceEntryId = entry.id;
+  document.getElementById("performance-form-title").textContent = "Edit journal entry";
+  document.getElementById("performance-save-button").textContent = "Save Changes";
+  document.getElementById("performance-cancel-edit").hidden = false;
+  const values = {
+    "performance-company": entry.company || "",
+    "performance-role": entry.role || "",
+    "performance-date": entry.date,
+    "performance-type": entry.type,
+    "performance-level": entry.performance,
+    "performance-opportunity": entry.opportunity_id || "",
+    "performance-topic": entry.preparation_topic_id || "",
+    "performance-questions": entry.questions,
+    "performance-couldnt-answer": entry.couldnt_answer,
+    "performance-what-learned": entry.what_learned,
+    "performance-action-items": entry.action_items,
+    "performance-notes": entry.notes
+  };
+  Object.entries(values).forEach(([id, value]) => { document.getElementById(id).value = value; });
+  document.getElementById("performance-journal-title").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function deletePerformanceEntry(entryId) {
+  try {
+    await requestApi(`/api/performance/${entryId}`, { method: "DELETE" });
+    setPerformanceMessage("Journal entry deleted.");
+    await Promise.all([loadPerformanceEntries(), loadPerformanceSummary()]);
+  } catch (error) {
+    setPerformanceMessage(error.message || "Couldn't delete this journal entry.");
+  }
+}
+
+function performanceFiltersChanged() {
+  void loadPerformanceEntries();
+}
+
+document.getElementById("preparation-form")?.addEventListener("submit", handlePreparationSubmit);
+document.getElementById("preparation-cancel-edit")?.addEventListener("click", resetPreparationForm);
+["preparation-filter-category", "preparation-filter-status"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", preparationFiltersChanged);
+});
+void loadPreparation();
+document.getElementById("opportunity-form")?.addEventListener("submit", handleOpportunitySubmit);
+document.getElementById("opportunity-cancel-edit")?.addEventListener("click", resetOpportunityForm);
+["opportunity-filter-status", "opportunity-filter-priority", "opportunity-filter-serious"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", opportunityFiltersChanged);
+});
+void loadOpportunities();
 document.getElementById("mit-form")?.addEventListener("submit", handleMitSubmit);
 document.getElementById("reflection-form")?.addEventListener("submit", handleReflectionSubmit);
+document.getElementById("dashboard-goal-form")?.addEventListener("submit", handleDashboardGoalSubmit);
+document.getElementById("dashboard-target-form")?.addEventListener("submit", handleDashboardTargetSubmit);
+document.getElementById("performance-entry-form")?.addEventListener("submit", handlePerformanceSubmit);
+document.getElementById("performance-cancel-edit")?.addEventListener("click", resetPerformanceForm);
+["performance-filter-type", "performance-filter-level", "performance-filter-company", "performance-filter-date"].forEach((id) => {
+  const input = document.getElementById(id);
+  input?.addEventListener(input.tagName === "SELECT" ? "change" : "input", performanceFiltersChanged);
+});
+if (document.getElementById("performance-entry-form")) {
+  document.getElementById("performance-date").value = getLocalDateString();
+  void Promise.all([loadPerformanceOptions(), loadPerformanceEntries(), loadPerformanceSummary()]).catch(() => {
+    const list = document.getElementById("performance-entry-list");
+    if (list) list.textContent = "Journal options couldn't be loaded. Please refresh to try again.";
+  });
+}
+void loadPlacementDashboard();
 
 loadDashboard().catch(() => {
   const habitList = document.getElementById("habit-list");

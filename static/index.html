@@ -1,23 +1,23 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f6f2">
-  <title>Placement Streak Tracker</title>
+  <title>Placement OS</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <div class="page-shell">
     <header class="topbar">
-      <a class="brand" href="#top" aria-label="Placement Streak Tracker home">
+      <a class="brand" href="#top" aria-label="Placement OS home">
         <span class="brand-mark" aria-hidden="true">P</span>
-        <span class="brand-name">Placement Streak Tracker</span>
+        <span class="brand-name">Placement OS</span>
       </a>
       <div class="sprint-label">
         <span class="sprint-dot" aria-hidden="true"></span>
-        <span>30-Day Placement Sprint</span>
+        <span>Placement Sprint: 6 Oct - 5 Nov 2026</span>
       </div>
     </header>
 
@@ -31,6 +31,204 @@
         <div class="day-pill">
           <span class="day-label">SPRINT PROGRESS</span>
           <strong id="sprint-day-value">Day 1 / 31</strong>
+        </div>
+      </section>
+
+
+      <section class="placement-dashboard" aria-labelledby="placement-dashboard-title">
+        <div class="panel goal-panel">
+          <div class="goal-copy">
+            <p class="eyebrow">PLACEMENT GOAL</p>
+            <h2 id="placement-dashboard-title">Your direction</h2>
+            <p class="dashboard-goal-value" id="dashboard-goal-value">Loading goal…</p>
+          </div>
+          <form class="dashboard-setting-form" id="dashboard-goal-form">
+            <label for="dashboard-goal-input">Update goal</label>
+            <div class="dashboard-setting-row">
+              <input class="task-input" id="dashboard-goal-input" type="text" maxlength="200" required>
+              <button type="submit">Save</button>
+            </div>
+            <p class="dashboard-message" id="dashboard-goal-message" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+
+        <div class="dashboard-metric-grid">
+          <a class="panel dashboard-metric-card" href="#opportunity-management">
+            <span class="eyebrow">SERIOUS APPLICATIONS</span>
+            <strong class="dashboard-metric-value" id="dashboard-active-applications">—</strong>
+            <span class="dashboard-card-link">View pipeline ↓</span>
+          </a>
+          <a class="panel dashboard-metric-card" href="#preparation-management">
+            <span class="eyebrow">PREPARATION</span>
+            <strong class="dashboard-metric-value" id="dashboard-preparation-percent">—</strong>
+            <span class="dashboard-metric-caption" id="dashboard-preparation-count">Loading topics…</span>
+            <span class="dashboard-card-link">View progress ↓</span>
+          </a>
+          <a class="panel dashboard-metric-card" href="#dashboard-deep-work">
+            <span class="eyebrow">TODAY'S DEEP WORK</span>
+            <strong class="dashboard-metric-value" id="dashboard-deep-work-percent">—</strong>
+            <span class="dashboard-metric-caption" id="dashboard-deep-work-actual">Loading sessions…</span>
+            <span class="dashboard-card-link">View target ↓</span>
+          </a>
+        </div>
+
+        <div class="dashboard-split-grid">
+          <section class="panel dashboard-panel" id="dashboard-pipeline" aria-labelledby="dashboard-pipeline-title">
+            <div class="panel-heading"><div><p class="eyebrow">SERIOUS APPLICATIONS</p><h2 id="dashboard-pipeline-title">Placement pipeline</h2></div></div>
+            <div class="pipeline-list" id="dashboard-pipeline-list"><p class="panel-description">Loading pipeline…</p></div>
+          </section>
+          <section class="panel dashboard-panel deadline-panel" aria-labelledby="dashboard-deadline-title">
+            <div><p class="eyebrow">UP NEXT</p><h2 id="dashboard-deadline-title">Next deadline</h2></div>
+            <div id="dashboard-next-deadline" class="deadline-content"><p class="panel-description">Loading deadline…</p></div>
+          </section>
+        </div>
+
+        <div class="dashboard-split-grid">
+          <section class="panel dashboard-panel" id="dashboard-preparation" aria-labelledby="dashboard-preparation-title">
+            <div class="panel-heading"><div><p class="eyebrow">TOPIC PROGRESS</p><h2 id="dashboard-preparation-title">Preparation</h2></div><span class="count-pill" id="dashboard-practice-count">0 practice sessions</span></div>
+            <p class="dashboard-summary-line" id="dashboard-preparation-summary">Loading preparation…</p>
+            <div class="category-progress-list" id="dashboard-category-progress"></div>
+          </section>
+          <section class="panel dashboard-panel" id="dashboard-deep-work" aria-labelledby="dashboard-deep-work-title">
+            <div class="panel-heading"><div><p class="eyebrow">TARGET VS ACTUAL</p><h2 id="dashboard-deep-work-title">Deep Work</h2></div></div>
+            <div class="deep-work-period">
+              <div class="deep-work-period-heading"><strong>Today</strong><span id="dashboard-deep-work-daily-text">—</span></div>
+              <div class="dashboard-progress-track"><span id="dashboard-deep-work-daily-bar"></span></div>
+              <p id="dashboard-deep-work-daily-progress" class="panel-description">— progress</p>
+            </div>
+            <div class="deep-work-period">
+              <div class="deep-work-period-heading"><strong>This week</strong><span id="dashboard-deep-work-weekly-text">—</span></div>
+              <div class="dashboard-progress-track"><span id="dashboard-deep-work-weekly-bar"></span></div>
+              <p id="dashboard-deep-work-weekly-progress" class="panel-description">— progress · Monday to today</p>
+            </div>
+            <form class="dashboard-setting-form target-setting-form" id="dashboard-target-form">
+              <label for="dashboard-target-input">Daily display target (minutes)</label>
+              <div class="dashboard-setting-row target-input-row"><input class="task-input" id="dashboard-target-input" type="number" min="1" max="1440" step="1" required><button type="submit">Save target</button></div>
+              <p class="dashboard-message" id="dashboard-target-message" role="status" aria-live="polite"></p>
+            </form>
+            <p class="dashboard-footnote">Display target only. Daily score continues to use its fixed 180-minute target.</p>
+          </section>
+        </div>
+
+        <section class="panel dashboard-panel" aria-labelledby="dashboard-focus-title">
+          <div class="panel-heading"><div><p class="eyebrow">REUSE TODAY'S PLANS</p><h2 id="dashboard-focus-title">Today's Focus</h2></div></div>
+          <div class="focus-grid">
+            <div><h3>Today's MITs</h3><div class="focus-list" id="dashboard-mits-list"><p class="panel-description">Loading MITs…</p></div></div>
+            <div><h3>Incomplete preparation topics</h3><div class="focus-list" id="dashboard-incomplete-topics"><p class="panel-description">Loading topics…</p></div></div>
+          </div>
+        </section>
+        <p class="dashboard-message dashboard-load-message" id="dashboard-load-message" role="status" aria-live="polite" hidden></p>
+      </section>
+
+      <section class="panel opportunity-panel" id="opportunity-management" aria-labelledby="opportunity-title">
+        <div class="panel-heading opportunity-heading">
+          <div>
+            <p class="eyebrow">FIND, EVALUATE, PURSUE</p>
+            <h2 id="opportunity-title">Opportunity Management</h2>
+          </div>
+          <span class="count-pill">Inbox to application pipeline</span>
+        </div>
+
+        <form id="opportunity-form" class="opportunity-form">
+          <h3 id="opportunity-form-title">Add an opportunity</h3>
+          <div class="opportunity-form-grid">
+            <label class="opportunity-field">Company<input id="opportunity-company" maxlength="200" required></label>
+            <label class="opportunity-field">Role<input id="opportunity-role" maxlength="200" required></label>
+            <label class="opportunity-field">Location<input id="opportunity-location" maxlength="200"></label>
+            <label class="opportunity-field">Source<input id="opportunity-source" maxlength="200" placeholder="Company site, referral, etc."></label>
+            <label class="opportunity-field">Job link<input id="opportunity-job-link" type="url" placeholder="https://..."></label>
+            <label class="opportunity-field">Status<select id="opportunity-status">
+              <option>Interested</option><option>Applied</option><option>Assessment</option><option>Interview</option><option>HR</option>
+              <option>Selected</option><option>Rejected</option><option>Withdrawn</option><option>Not Eligible</option><option>Expired</option>
+            </select></label>
+            <label class="opportunity-field">Priority<select id="opportunity-priority"><option>Low</option><option selected>Medium</option><option>High</option></select></label>
+            <label class="opportunity-field">CTC<input id="opportunity-ctc" maxlength="100" placeholder="e.g. 8-12 LPA"></label>
+            <label class="opportunity-field">Deadline<input id="opportunity-deadline" type="date"></label>
+            <label class="opportunity-field">Referral<input id="opportunity-referral" maxlength="200" placeholder="Name or referral details"></label>
+            <label class="opportunity-field">Eligibility<input id="opportunity-eligibility" maxlength="500"></label>
+            <label class="opportunity-field">Requirements<input id="opportunity-requirements" maxlength="1000"></label>
+            <label class="opportunity-check-field"><input id="opportunity-serious" type="checkbox"><span>Serious application</span></label>
+          </div>
+          <label class="opportunity-field opportunity-notes-field">Notes<textarea id="opportunity-notes" rows="3" maxlength="3000"></textarea></label>
+          <div class="opportunity-form-actions">
+            <button type="submit" id="opportunity-save-button">Save opportunity</button>
+            <button type="button" class="secondary-button" id="opportunity-cancel-edit" hidden>Cancel edit</button>
+          </div>
+          <p class="opportunity-message" id="opportunity-message" role="status" aria-live="polite"></p>
+        </form>
+
+        <div class="opportunity-list-heading">
+          <div><p class="eyebrow">YOUR OPPORTUNITIES</p><h3>Inbox and serious applications</h3></div>
+          <div class="opportunity-filters" aria-label="Filter opportunities">
+            <label>Status<select id="opportunity-filter-status"><option value="">All statuses</option>
+              <option>Interested</option><option>Applied</option><option>Assessment</option><option>Interview</option><option>HR</option>
+              <option>Selected</option><option>Rejected</option><option>Withdrawn</option><option>Not Eligible</option><option>Expired</option>
+            </select></label>
+            <label>Priority<select id="opportunity-filter-priority"><option value="">All priorities</option><option>Low</option><option>Medium</option><option>High</option></select></label>
+            <label>Group<select id="opportunity-filter-serious"><option value="">Inbox and serious</option><option value="false">Inbox only</option><option value="true">Serious only</option></select></label>
+          </div>
+        </div>
+        <p class="opportunity-list-message" id="opportunity-list-message" role="status" aria-live="polite"></p>
+        <div class="opportunity-groups">
+          <section class="opportunity-group" aria-labelledby="opportunity-inbox-title">
+            <div class="opportunity-group-heading"><h3 id="opportunity-inbox-title">Opportunity Inbox</h3><span class="count-pill" id="opportunity-inbox-count">0</span></div>
+            <div class="opportunity-list" id="opportunity-inbox-list"><p class="panel-description">Loading opportunities...</p></div>
+          </section>
+          <section class="opportunity-group" aria-labelledby="opportunity-serious-title">
+            <div class="opportunity-group-heading"><h3 id="opportunity-serious-title">Serious Applications</h3><span class="count-pill" id="opportunity-serious-count">0</span></div>
+            <div class="opportunity-list" id="opportunity-serious-list"><p class="panel-description">Loading applications...</p></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel preparation-management-panel" id="preparation-management" aria-labelledby="preparation-management-title">
+        <div class="panel-heading preparation-management-heading">
+          <div>
+            <p class="eyebrow">LEARN, PRACTICE, PROGRESS</p>
+            <h2 id="preparation-management-title">Preparation Tracking</h2>
+          </div>
+          <span class="count-pill">Topics and practice</span>
+        </div>
+
+        <div class="preparation-progress-grid" aria-label="Preparation progress">
+          <article class="analytics-card"><p class="analytics-label">Total Topics</p><p class="analytics-value" id="preparation-total-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">Completed</p><p class="analytics-value" id="preparation-completed-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">In Progress</p><p class="analytics-value" id="preparation-in-progress-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">Not Started</p><p class="analytics-value" id="preparation-not-started-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">Total Practice</p><p class="analytics-value" id="preparation-total-practices">0</p></article>
+        </div>
+        <div class="preparation-progress-line">
+          <div class="preparation-progress-track"><span id="preparation-completion-bar"></span></div>
+          <strong id="preparation-completion-percent">0%</strong>
+        </div>
+
+        <form id="preparation-form" class="opportunity-form preparation-form">
+          <h3 id="preparation-form-title">Add a topic</h3>
+          <div class="opportunity-form-grid preparation-form-grid">
+            <label class="opportunity-field">Category<select id="preparation-category" required><option value="">Loading categories...</option></select></label>
+            <label class="opportunity-field">Topic name<input id="preparation-name" maxlength="200" required></label>
+            <label class="opportunity-field">Status<select id="preparation-status">
+              <option>Not Started</option><option>In Progress</option><option>Completed</option>
+            </select></label>
+          </div>
+          <label class="opportunity-field preparation-notes-field">Notes<textarea id="preparation-notes" rows="2" maxlength="2000"></textarea></label>
+          <div class="opportunity-form-actions">
+            <button type="submit" id="preparation-save-button">Save topic</button>
+            <button type="button" class="secondary-button" id="preparation-cancel-edit" hidden>Cancel edit</button>
+          </div>
+          <p class="preparation-message" id="preparation-form-message" role="status" aria-live="polite"></p>
+        </form>
+
+        <div class="preparation-list-heading">
+          <div><p class="eyebrow">YOUR STUDY PLAN</p><h3>Preparation Topics</h3></div>
+          <div class="preparation-filters" aria-label="Filter preparation topics">
+            <label>Category<select id="preparation-filter-category"><option value="">All categories</option></select></label>
+            <label>Status<select id="preparation-filter-status"><option value="">All statuses</option></select></label>
+          </div>
+        </div>
+        <p class="preparation-list-message" id="preparation-list-message" role="status" aria-live="polite"></p>
+        <div class="preparation-topic-groups" id="preparation-topic-groups">
+          <p class="panel-description">Loading preparation topics...</p>
         </div>
       </section>
 
@@ -116,25 +314,48 @@
             <div class="panel-heading compact-heading">
               <div>
                 <p class="eyebrow">FOCUSED TIME</p>
-                <h2 id="deep-work-title">Deep work</h2>
+                <h2 id="deep-work-title">Deep Work</h2>
               </div>
-              <span class="deep-work-icon" aria-hidden="true">◷</span>
+              <span class="deep-work-icon" aria-hidden="true">DW</span>
             </div>
+            <label class="deep-work-date-label" for="deep-work-date">Sessions for</label>
+            <input class="task-input" id="deep-work-date" type="date">
             <p class="deep-work-value" id="deep-work-value">0 <span>minutes</span></p>
             <p class="panel-description" id="deep-work-note">Today's focused work.</p>
-            <form id="deep-work-form">
-              <label class="sr-only" for="deep-work-minutes">Deep-work minutes</label>
-              <div class="deep-work-input-row">
-                <input class="task-input" id="deep-work-minutes" type="number" min="0" step="1" value="0">
-                <span>minutes</span>
+            <div class="deep-work-session-summary">
+              <span id="deep-work-session-count">0 sessions</span>
+              <span id="deep-work-total-label"></span>
+            </div>
+            <div class="deep-work-session-list" id="deep-work-sessions" aria-live="polite">
+              <p class="panel-description">Loading sessions...</p>
+            </div>
+            <div class="deep-work-timer">
+              <div class="deep-work-timer-heading">
+                <div><p class="eyebrow">FOCUS TIMER</p><strong>Focused work session</strong></div>
+                <span id="deep-work-timer-display" aria-live="off">00:00:00</span>
               </div>
-              <button class="task-input" id="deep-work-save" type="submit">Save Deep Work</button>
+              <label class="sr-only" for="deep-work-category">Session category</label>
+              <select class="task-input" id="deep-work-category" required><option value="">Loading categories...</option></select>
+              <div class="deep-work-timer-actions">
+                <button type="button" id="deep-work-timer-start">Start</button>
+                <button type="button" class="secondary-button" id="deep-work-timer-stop" disabled>Stop and save</button>
+              </div>
+            </div>
+            <form id="deep-work-form" class="deep-work-manual-form">
+              <h3>Add a past or manual session</h3>
+              <label class="sr-only" for="deep-work-minutes">Duration in minutes</label>
+              <div class="deep-work-input-row">
+                <input class="task-input" id="deep-work-minutes" type="number" min="30" step="1" value="30" required>
+                <span>minutes (30 minimum)</span>
+              </div>
+              <label class="sr-only" for="deep-work-notes">Optional session notes</label>
+              <input class="task-input" id="deep-work-notes" type="text" maxlength="2000" placeholder="Optional notes">
+              <button id="deep-work-save" type="submit">Add session</button>
             </form>
-            <p class="panel-description" id="deep-work-message" role="status" aria-live="polite"></p>
+            <p class="panel-description deep-work-message" id="deep-work-message" role="status" aria-live="polite"></p>
             <div class="goal-row"><span>Daily focus goal</span><span>3 hours</span></div>
             <div class="goal-track" aria-hidden="true"><span></span></div>
           </section>
-
           <section class="panel mits-panel" aria-labelledby="mits-title">
             <div class="panel-heading compact-heading">
               <div>
@@ -177,7 +398,7 @@
         <div class="panel-heading sprint-history-heading">
           <div>
             <p class="eyebrow">YOUR DAILY PROGRESS</p>
-            <h2 id="sprint-history-title">30-Day Placement History</h2>
+            <h2 id="sprint-history-title">Placement Sprint History</h2>
           </div>
           <span class="count-pill">31 days</span>
         </div>
@@ -199,7 +420,50 @@
           </table>
         </div>
       </section>
-      <footer class="page-footer"><span>Progress is built one focused day at a time.</span><span class="footer-mark">PLACEMENT SPRINT <b>·</b> 30 DAYS</span></footer>
+      <section class="panel performance-journal-panel" id="performance-journal" aria-labelledby="performance-journal-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">LEARN FROM EACH EXPERIENCE</p>
+            <h2 id="performance-journal-title">Performance Journal</h2>
+          </div>
+          <a class="dashboard-card-link" href="#performance-entry-form">Add an entry &darr;</a>
+        </div>
+        <div class="performance-summary" aria-live="polite">
+          <strong id="performance-total">0 entries</strong>
+          <span id="performance-summary-levels">Good 0 &middot; Mixed 0 &middot; Poor 0</span>
+        </div>
+        <form id="performance-entry-form" class="performance-form">
+          <h3 id="performance-form-title">Record an experience</h3>
+          <div class="performance-form-grid">
+            <label>Company<input id="performance-company" maxlength="200"></label>
+            <label>Role<input id="performance-role" maxlength="200"></label>
+            <label>Date<input id="performance-date" type="date" required></label>
+            <label>Type<select id="performance-type" required>
+              <option>Assessment</option><option>Coding Test</option><option>Technical Interview</option><option>HR Interview</option><option>Mock Interview</option>
+            </select></label>
+            <label>Performance<select id="performance-level" required><option>Good</option><option>Mixed</option><option>Poor</option></select></label>
+            <label>Opportunity (optional)<select id="performance-opportunity"><option value="">No linked opportunity</option></select></label>
+            <label>Preparation topic (optional)<select id="performance-topic"><option value="">No linked topic</option></select></label>
+          </div>
+          <label>Questions or topics<textarea id="performance-questions" rows="2"></textarea></label>
+          <label>Couldn't answer<textarea id="performance-couldnt-answer" rows="2"></textarea></label>
+          <label>What I learned<textarea id="performance-what-learned" rows="2"></textarea></label>
+          <label>Action items<textarea id="performance-action-items" rows="2"></textarea></label>
+          <label>Notes<textarea id="performance-notes" rows="2"></textarea></label>
+          <div class="performance-form-actions"><button type="submit" id="performance-save-button">Save Entry</button><button type="button" class="secondary-button" id="performance-cancel-edit" hidden>Cancel edit</button></div>
+          <p class="panel-description" id="performance-message" role="status" aria-live="polite"></p>
+        </form>
+        <div class="performance-list-heading"><h3>Recent Entries</h3>
+          <div class="performance-filters">
+            <label>Type<select id="performance-filter-type"><option value="">All types</option><option>Assessment</option><option>Coding Test</option><option>Technical Interview</option><option>HR Interview</option><option>Mock Interview</option></select></label>
+            <label>Performance<select id="performance-filter-level"><option value="">All levels</option><option>Good</option><option>Mixed</option><option>Poor</option></select></label>
+            <label>Company<input id="performance-filter-company" type="search" placeholder="Filter company"></label>
+            <label>Date<input id="performance-filter-date" type="date"></label>
+          </div>
+        </div>
+        <div id="performance-entry-list" class="performance-entry-list" aria-live="polite">Loading journal&hellip;</div>
+      </section>
+      <footer class="page-footer"><span>Progress is built one focused day at a time.</span><span class="footer-mark">PLACEMENT SPRINT <b>·</b> 31 DAYS</span></footer>
     </main>
   </div>
 </body>
