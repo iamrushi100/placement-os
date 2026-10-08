@@ -5,7 +5,7 @@ from typing import Iterator
 
 
 DATABASE_PATH = Path(__file__).resolve().parent.parent / "placement.db"
-LATEST_SCHEMA_VERSION = 6
+LATEST_SCHEMA_VERSION = 7
 
 
 @contextmanager
@@ -254,6 +254,27 @@ def _create_performance_entries_table(connection: sqlite3.Connection) -> None:
     )
 
 
+def _snapshot_performance_context(connection: sqlite3.Connection) -> None:
+    """Backfill existing linked entries without replacing stored snapshots."""
+    connection.execute(
+        """
+        UPDATE performance_entries
+        SET company = COALESCE(
+                company,
+                (SELECT company FROM opportunities WHERE id = performance_entries.opportunity_id)
+            ),
+            role = COALESCE(
+                role,
+                (SELECT role FROM opportunities WHERE id = performance_entries.opportunity_id)
+            )
+        WHERE opportunity_id IS NOT NULL
+          AND EXISTS (
+              SELECT 1 FROM opportunities WHERE id = performance_entries.opportunity_id
+          )
+        """
+    )
+
+
 MIGRATIONS = (
     (1, _create_current_tables),
     (2, _create_opportunities_table),
@@ -261,6 +282,7 @@ MIGRATIONS = (
     (4, _create_deep_work_tables),
     (5, _create_dashboard_settings_table),
     (6, _create_performance_entries_table),
+    (7, _snapshot_performance_context),
 )
 
 

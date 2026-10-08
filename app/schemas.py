@@ -445,13 +445,6 @@ class PerformanceEntryCreate(BaseModel):
         text = value.strip()
         return text or None
 
-    @model_validator(mode="after")
-    def linked_opportunity_owns_company_and_role(self):
-        if self.opportunity_id is not None and (self.company is not None or self.role is not None):
-            raise ValueError("Company and role are read from the linked opportunity")
-        return self
-
-
 class PerformanceEntryUpdate(BaseModel):
     date: PerformanceDate | None = None
     type: PerformanceType | None = None
@@ -481,8 +474,6 @@ class PerformanceEntryUpdate(BaseModel):
         for field_name in ("date", "type", "performance"):
             if field_name in self.model_fields_set and getattr(self, field_name) is None:
                 raise ValueError(f"{field_name} cannot be null")
-        if self.opportunity_id is not None and (self.company is not None or self.role is not None):
-            raise ValueError("Company and role are read from the linked opportunity")
         return self
 
 

@@ -11,6 +11,8 @@ import app.database as database
 from app.database import initialize_database
 from app.main import (
     create_opportunity,
+    update_opportunity,
+    delete_opportunity,
     create_habit,
     complete_habit,
     create_daily_entry,
@@ -33,6 +35,7 @@ from app.main import (
 )
 from app.schemas import (
     OpportunityCreate,
+    OpportunityUpdate,
     HabitCreate,
     DailyEntryCreate,
     MITCreate,
@@ -106,7 +109,7 @@ class PerformanceJournalTests(unittest.TestCase):
                 "SELECT status, practice_count FROM preparation_topics WHERE id = ?",
                 (topic["id"],),
             ).fetchone()
-        self.assertEqual(stored, (None, None))
+        self.assertEqual(stored, ("Example Labs", "Backend Engineer"))
         self.assertEqual(topic_state, ("Not Started", 0))
 
         updated = update_performance_entry(entry["id"], PerformanceEntryUpdate(
@@ -128,6 +131,36 @@ class PerformanceJournalTests(unittest.TestCase):
         ))
         self.assertIsNone(standalone["opportunity_id"])
         self.assertIsNone(standalone["preparation_topic_id"])
+
+
+    def test_linked_company_and_role_are_snapshots(self):
+        opportunity = create_opportunity(
+            OpportunityCreate(company="Snapshot Co", role="Platform Engineer")
+        )
+        entry = create_performance_entry(self.sample(
+            opportunity_id=opportunity["id"], company=None, role=None
+        ))
+        update_opportunity(opportunity["id"], OpportunityUpdate(
+            company="Renamed Co", role="New Role"
+        ))
+        self.assertEqual(get_performance_entry(entry["id"])["company"], "Snapshot Co")
+        self.assertEqual(get_performance_entry(entry["id"])["role"], "Platform Engineer")
+
+        delete_opportunity(opportunity["id"])
+        unlinked = get_performance_entry(entry["id"])
+        self.assertIsNone(unlinked["opportunity_id"])
+        self.assertEqual(unlinked["company"], "Snapshot Co")
+        self.assertEqual(unlinked["role"], "Platform Engineer")
+
+    def test_manual_company_and_role_are_preserved_when_linked(self):
+        opportunity = create_opportunity(
+            OpportunityCreate(company="Opportunity Co", role="Opportunity Role")
+        )
+        entry = create_performance_entry(self.sample(
+            opportunity_id=opportunity["id"], company="Manual Co", role="Manual Role"
+        ))
+        self.assertEqual(entry["company"], "Manual Co")
+        self.assertEqual(entry["role"], "Manual Role")
 
     def test_filters_by_type_performance_company_opportunity_and_date(self):
         opportunity = create_opportunity(

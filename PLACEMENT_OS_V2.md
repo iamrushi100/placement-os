@@ -134,7 +134,7 @@ behavior, missing records, and the existing V1/V2 regression workflows. The full
 
 Deep Work tracks completed focus sessions independently of the V1 daily-entry record. A manual session stores a date, duration of at least 30 minutes, one of the supported focus categories, and optional notes. Timer sessions use the same record shape and preserve their start/end timestamps. Only one timer can be active; elapsed time is calculated when it is stopped, and sessions shorter than 30 minutes are discarded.
 
-Migration version 4 adds `deep_work_sessions` and the singleton `deep_work_active_timer` table. The daily summary reports the sum of V2 sessions against a 180-minute target. To preserve older V1 data without double-counting, score, history, and analytics calculations use the V2 session total when sessions exist for a date and otherwise fall back to that date's legacy `daily_entries` value. The score formula and 180-minute cap are unchanged.
+Migration version 4 adds `deep_work_sessions` and the singleton `deep_work_active_timer` table. The daily summary, dashboard totals, score, sprint history, and analytics use the same date-level source rule: the V2 session total wins when at least one session exists for a date; otherwise they fall back to that date's legacy `daily_entries` value. This preserves older V1 data without double-counting. New dashboard entries create V2 sessions (minimum 30 minutes, with a selected category); the legacy daily-entry API remains available for compatibility. The score formula and 180-minute cap are unchanged.
 
 ### API
 
@@ -153,7 +153,7 @@ The Placement Dashboard is a read and aggregation view that answers where placem
 
 The dashboard reads serious opportunities for the active application count and status pipeline. Active statuses are Interested, Applied, Assessment, Interview, and HR; Selected, Rejected, Withdrawn, Not Eligible, and Expired do not count as active. The pipeline shows counts for serious opportunities by status. The next deadline is the earliest future deadline across non-terminal opportunities.
 
-Preparation totals, status counts, completion percentage, practice count, and per-category completion percentages come from `preparation_categories` and `preparation_topics`. Daily and weekly Deep Work actuals are sums of `deep_work_sessions`; the week is Monday through today. The weekly target is the configured daily display target multiplied by seven. Today's Focus reads the existing MIT records and incomplete preparation topics.
+Preparation totals, status counts, completion percentage, practice count, and per-category completion percentages come from `preparation_categories` and `preparation_topics`. Daily and weekly Deep Work actuals use the shared session-first, legacy-fallback rule; the week is Monday through today. The weekly target is the configured daily display target multiplied by seven. Today's Focus reads the existing MIT records and incomplete preparation topics.
 
 The daily display target defaults to 180 minutes and can be configured from the dashboard. It is not the scoring target: V1 daily scoring still uses its fixed 180-minute cap regardless of the dashboard setting. The default placement goal is “Get placed in a good software / AI role.”
 
@@ -176,7 +176,7 @@ Standard-library tests cover setting defaults and updates, active versus termina
 
 The Performance Journal records what happened in assessments, coding tests, interviews, and mock interviews, then keeps the user's lessons and action items together. Types are Assessment, Coding Test, Technical Interview, HR Interview, and Mock Interview; performance is Good, Mixed, or Poor. Questions, gaps, lessons, action items, and notes remain plain text so the journal is easy to use without creating a separate question bank or task tracker.
 
-Migration version 6 adds `performance_entries`. Each dated record can optionally link to an opportunity and a preparation topic. These foreign keys use `ON DELETE SET NULL`: deleting a linked opportunity or topic preserves the journal record. When an opportunity is linked, company and role are displayed from that opportunity rather than copied into the journal. Topic links are references only; journal operations do not create topics, change their status, or increment practice counts.
+Migration version 6 adds `performance_entries`. Each dated record can optionally link to an opportunity and a preparation topic. These foreign keys use `ON DELETE SET NULL`: deleting a linked opportunity or topic preserves the journal record. Company and role are stored as snapshots when an opportunity is linked; a version 7 migration backfills missing snapshots for existing linked rows. Later opportunity edits or deletion do not rewrite those snapshots, and users may supply their own company or role text. Topic links are references only; journal operations do not create topics, change their status, or increment practice counts.
 
 ### API and frontend
 
@@ -188,3 +188,10 @@ Migration version 6 adds `performance_entries`. Each dated record can optionally
 The dashboard journal form uses the existing opportunity and preparation topic APIs for optional dropdown links. Entries can be reviewed, filtered, edited, and deleted with the existing vanilla JavaScript frontend. The learning loop remains user-directed: journal an experience, choose an action, connect it to a topic if helpful, then practice through Preparation Tracking.
 
 Standard-library tests cover CRUD, filters, validation, missing references, optional and valid relationships, summary counts, no automatic topic changes, and migration from schema version 5 with V1/V2 data preserved. The full suite also exercises existing habit, opportunity, preparation, deep-work, and dashboard workflows. No new runtime or test dependencies were added.
+
+
+## Score and sprint data rules
+
+Daily score counts only active habits and caps each category at its five scoring slots, so a score cannot exceed 100 even if extra habits are added. The response's completion counts still report all completed active habits in each category. Sprint analytics use the same active-habit rule for their completion rate.
+
+The sprint is inclusive from 2026-10-06 through 2026-11-05, which is 31 calendar dates. UI labels use "Placement Sprint" rather than "30-Day". The streak response identifies whether the sprint is upcoming, in progress, or completed and provides its `as_of_date`; after the end date, the displayed streak is explicitly historical through 2026-11-05.

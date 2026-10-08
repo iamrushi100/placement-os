@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from app.database import initialize_database
+from app.database import database_connection, initialize_database
 from app.main import (
     calculate_daily_score,
     create_deep_work_session,
@@ -113,6 +113,7 @@ class DeepWorkTests(unittest.TestCase):
             finally:
                 connection.close()
             self.assertEqual(score_before["score"], 20)
+            self.assertEqual(get_daily_deep_work_summary(legacy_date)["total_minutes"], 90)
             create_deep_work_session(DeepWorkSessionCreate(
                 date=legacy_date, duration_minutes=30, category="Other"
             ))
@@ -122,6 +123,47 @@ class DeepWorkTests(unittest.TestCase):
             finally:
                 connection.close()
             self.assertEqual(score_after["score"], 7)
+            self.assertEqual(get_daily_deep_work_summary(legacy_date)["total_minutes"], 30)
+            with database_connection(self.database_path) as verify_connection:
+                self.assertEqual(
+                    verify_connection.execute(
+                        "SELECT deep_work_minutes FROM daily_entries WHERE date = ?",
+                        (legacy_date.isoformat(),),
+                    ).fetchone()[0],
+                    90,
+                )
+
+    def test_score_is_capped_at_100_and_inactive_habits_do_not_count(self):
+        import sqlite3
+        with database_connection(self.database_path) as connection:
+            connection.execute(
+                "INSERT INTO daily_entries (date, deep_work_minutes) VALUES ('2026-10-07', 180)"
+            )
+            habit_ids = []
+            for category in ("Technical", "Placement"):
+                for index in range(6):
+                    cursor = connection.execute(
+                        "INSERT INTO habits (name, category) VALUES (?, ?)",
+                        (f"{category} {index}", category),
+                    )
+                    habit_ids.append(cursor.lastrowid)
+            connection.executemany(
+                "INSERT INTO habit_completions (habit_id, date) VALUES (?, '2026-10-07')",
+                ((habit_id,) for habit_id in habit_ids),
+            )
+            connection.commit()
+            capped = calculate_daily_score(connection, date(2026, 10, 7))
+            self.assertEqual(capped["score"], 100)
+            self.assertEqual(capped["technical_completed"], 6)
+            self.assertEqual(capped["placement_completed"], 6)
+            connection.execute(
+                "UPDATE habits SET is_active = 0 WHERE category = 'Technical' AND id != ?",
+                (habit_ids[4],),
+            )
+            connection.commit()
+            inactive_excluded = calculate_daily_score(connection, date(2026, 10, 7))
+            self.assertEqual(inactive_excluded["technical_completed"], 1)
+            self.assertEqual(inactive_excluded["score"], 76)
 
 
 if __name__ == "__main__":

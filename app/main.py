@@ -110,20 +110,20 @@ def calculate_daily_score(connection: sqlite3.Connection, requested_date: date) 
         "SELECT COUNT(*) FROM habit_completions AS completion "
         "JOIN habits AS habit ON habit.id = completion.habit_id "
         "WHERE completion.date = ? AND completion.completed = 1 "
-        "AND habit.category = 'Technical'",
+        "AND habit.is_active = 1 AND habit.category = 'Technical'",
         (date_string,),
     ).fetchone()[0]
     placement_completed = connection.execute(
         "SELECT COUNT(*) FROM habit_completions AS completion "
         "JOIN habits AS habit ON habit.id = completion.habit_id "
         "WHERE completion.date = ? AND completion.completed = 1 "
-        "AND habit.category = 'Placement'",
+        "AND habit.is_active = 1 AND habit.category = 'Placement'",
         (date_string,),
     ).fetchone()[0]
 
     deep_work_points = min(deep_work_minutes / DEEP_WORK_TARGET_MINUTES, 1) * 40
-    technical_points = technical_completed / 5 * 30
-    placement_points = placement_completed / 5 * 30
+    technical_points = min(technical_completed, 5) / 5 * 30
+    placement_points = min(placement_completed, 5) / 5 * 30
     score = int(round(deep_work_points + technical_points + placement_points))
 
     return {
@@ -394,11 +394,22 @@ def get_placement_streak():
                 current_day += timedelta(days=1)
 
     current_streak = calculate_placement_streak(scores_by_date, today)
+    if today < SPRINT_START:
+        period_status = "upcoming"
+        as_of_date = None
+    elif today > SPRINT_END:
+        period_status = "completed"
+        as_of_date = SPRINT_END.isoformat()
+    else:
+        period_status = "in_progress"
+        as_of_date = today.isoformat()
     return {
         "sprint_start": SPRINT_START.isoformat(),
         "sprint_end": SPRINT_END.isoformat(),
         "threshold": PLACEMENT_THRESHOLD,
         "current_streak": current_streak,
+        "period_status": period_status,
+        "as_of_date": as_of_date,
     }
 
 
@@ -938,8 +949,8 @@ def get_daily_deep_work_summary(requested_date: date):
             f"SELECT {DEEP_WORK_SESSION_SELECT} FROM deep_work_sessions WHERE date = ? ORDER BY id",
             (requested_date.isoformat(),),
         ).fetchall()
+        total = get_deep_work_minutes(connection, requested_date)
     sessions = [_deep_work_session_dict(row) for row in rows]
-    total = sum(session["duration_minutes"] for session in sessions)
     return {
         "date": requested_date.isoformat(),
         "total_minutes": total,
@@ -1140,15 +1151,11 @@ def get_dashboard():
         }
 
         target_minutes = settings["daily_deep_work_target_minutes"]
-        daily_actual = connection.execute(
-            "SELECT COALESCE(SUM(duration_minutes), 0) FROM deep_work_sessions WHERE date = ?",
-            (today_text,),
-        ).fetchone()[0]
-        weekly_actual = connection.execute(
-            "SELECT COALESCE(SUM(duration_minutes), 0) FROM deep_work_sessions "
-            "WHERE date BETWEEN ? AND ?",
-            (week_start.isoformat(), today_text),
-        ).fetchone()[0]
+        daily_actual = get_deep_work_minutes(connection, today)
+        weekly_actual = sum(
+            get_deep_work_minutes(connection, week_start + timedelta(days=day_offset))
+            for day_offset in range((today - week_start).days + 1)
+        )
         deep_work = {
             "daily": {
                 "target_minutes": target_minutes,
@@ -1185,8 +1192,7 @@ def get_dashboard():
     }
 
 PERFORMANCE_ENTRY_SELECT = (
-    "entry.id, COALESCE(opportunity.company, entry.company) AS company, "
-    "COALESCE(opportunity.role, entry.role) AS role, entry.date, entry.type, "
+    "entry.id, entry.company, entry.role, entry.date, entry.type, "
     "entry.performance, entry.opportunity_id, entry.preparation_topic_id, "
     "topic.name AS preparation_topic_name, category.name AS preparation_category, "
     "entry.questions, entry.couldnt_answer, entry.what_learned, "
@@ -1194,7 +1200,6 @@ PERFORMANCE_ENTRY_SELECT = (
 )
 PERFORMANCE_ENTRY_FROM = (
     "performance_entries AS entry "
-    "LEFT JOIN opportunities AS opportunity ON opportunity.id = entry.opportunity_id "
     "LEFT JOIN preparation_topics AS topic ON topic.id = entry.preparation_topic_id "
     "LEFT JOIN preparation_categories AS category ON category.id = topic.category_id"
 )
@@ -1228,6 +1233,13 @@ def create_performance_entry(entry: PerformanceEntryCreate):
     with database_connection(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
         _validate_performance_references(connection, values)
+        if values["opportunity_id"] is not None:
+            opportunity = connection.execute(
+                "SELECT company, role FROM opportunities WHERE id = ?",
+                (values["opportunity_id"],),
+            ).fetchone()
+            values["company"] = values["company"] or opportunity["company"]
+            values["role"] = values["role"] or opportunity["role"]
         cursor = connection.execute(
             "INSERT INTO performance_entries "
             "(company, role, date, type, performance, opportunity_id, preparation_topic_id, "
@@ -1286,7 +1298,7 @@ def list_performance_entries(
             conditions.append(f"{column} = ?")
             parameters.append(value)
     if company is not None:
-        conditions.append("LOWER(COALESCE(opportunity.company, entry.company, '')) = LOWER(?)")
+        conditions.append("LOWER(COALESCE(entry.company, '')) = LOWER(?)")
         parameters.append(company.strip())
     if date is not None:
         conditions.append("entry.date = ?")
@@ -1325,14 +1337,18 @@ def update_performance_entry(entry_id: int, changes: PerformanceEntryUpdate):
         ).fetchone()
         if current is None:
             raise HTTPException(status_code=404, detail="Performance entry not found")
-        if "opportunity_id" in updates and updates["opportunity_id"] is not None:
-            if "company" in updates or "role" in updates:
-                raise HTTPException(status_code=422, detail="Company and role are read from the linked opportunity")
-        elif current["opportunity_id"] is not None and (
-            ("company" in updates or "role" in updates) and "opportunity_id" not in updates
-        ):
-            raise HTTPException(status_code=422, detail="Clear opportunity_id before setting company or role")
         _validate_performance_references(connection, updates)
+        new_opportunity_id = updates.get("opportunity_id", current["opportunity_id"])
+        if (
+            new_opportunity_id is not None
+            and new_opportunity_id != current["opportunity_id"]
+        ):
+            opportunity = connection.execute(
+                "SELECT company, role FROM opportunities WHERE id = ?",
+                (new_opportunity_id,),
+            ).fetchone()
+            updates.setdefault("company", opportunity["company"])
+            updates.setdefault("role", opportunity["role"])
         if "questions" in updates and updates["questions"] is None:
             updates["questions"] = ""
         if "couldnt_answer" in updates and updates["couldnt_answer"] is None:

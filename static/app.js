@@ -32,6 +32,17 @@ function setNote(elementId, message) {
   }
 }
 
+function setPlacementStreak(streak) {
+  setValueBeforeSuffix("placement-streak-value", streak.current_streak);
+  if (streak.period_status === "completed") {
+    setNote("placement-streak-note", `Final sprint streak through ${streak.as_of_date}: ${streak.current_streak} days`);
+  } else if (streak.period_status === "upcoming") {
+    setNote("placement-streak-note", `Sprint begins ${streak.sprint_start}`);
+  } else {
+    setNote("placement-streak-note", `Current sprint streak as of ${streak.as_of_date}`);
+  }
+}
+
 function showDashboardMessage(message) {
   const habitList = document.getElementById("habit-list");
   if (!habitList) return;
@@ -199,8 +210,7 @@ async function refreshAfterCompletion(today) {
   }
 
   if (streakResult.status === "fulfilled") {
-    setValueBeforeSuffix("placement-streak-value", streakResult.value.current_streak);
-    setNote("placement-streak-note", "Keep showing up, one day at a time");
+    setPlacementStreak(streakResult.value);
   } else {
     errors.push("placement streak");
     setValueBeforeSuffix("placement-streak-value", "—");
@@ -417,7 +427,7 @@ function updateSprintDay(sprintStart, sprintEnd, today = getLocalDateString()) {
   display.textContent = `Day ${elapsedDays} / ${totalDays}`;
 }
 
-function setDeepWorkState(minutes, saved, messageText = "") {
+function setDeepWorkState(minutes, messageText = "") {
   const display = document.getElementById("deep-work-value");
   const input = document.getElementById("deep-work-minutes");
   const button = document.getElementById("deep-work-save");
@@ -425,28 +435,33 @@ function setDeepWorkState(minutes, saved, messageText = "") {
   if (display && display.firstChild) {
     display.firstChild.textContent = minutes === null ? "— " : `${minutes} `;
   }
-  if (input) {
-    if (minutes !== null) input.value = String(minutes);
-    input.disabled = saved || minutes === null;
-  }
-  if (button) {
-    button.disabled = saved || minutes === null;
-    button.dataset.saved = String(saved);
-  }
+  if (input) input.disabled = minutes === null;
+  if (button) button.disabled = minutes === null;
   if (message) message.textContent = messageText;
 }
 
-async function loadDailyEntry(today) {
+async function loadDailyDeepWork(today) {
   try {
-    const entry = await getJson(`/api/daily-entries/${today}`);
-    setDeepWorkState(entry.deep_work_minutes, true, "Today's deep-work entry is already saved.");
-    return entry;
-  } catch (error) {
-    if (error.status === 404) {
-      setDeepWorkState(0, false);
-      return null;
+    const summary = await getJson(`/api/deep-work/daily/${today}`);
+    if (summary.sessions.length > 0) {
+      setDeepWorkState(summary.total_minutes, "V2 session total; add another session if needed.");
+      setNote("deep-work-note", `${summary.sessions.length} session${summary.sessions.length === 1 ? "" : "s"} recorded today.`);
+      return summary;
     }
-    setDeepWorkState(null, false, "Today's deep-work entry couldn't be loaded.");
+
+    try {
+      const legacyEntry = await getJson(`/api/daily-entries/${today}`);
+      setDeepWorkState(legacyEntry.deep_work_minutes, "Legacy daily total shown; saving adds a V2 session.");
+      setNote("deep-work-note", "Showing the existing V1 daily total.");
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      setDeepWorkState(0);
+      setNote("deep-work-note", "No deep-work recorded today.");
+    }
+    return summary;
+  } catch {
+    setDeepWorkState(null, "Today's deep-work total couldn't be loaded.");
+    setNote("deep-work-note", "Deep-work time couldn't be loaded.");
     return null;
   }
 }
@@ -469,15 +484,19 @@ async function refreshAfterDeepWorkSave(today) {
   }
 
   if (streakResult.status === "fulfilled") {
-    setValueBeforeSuffix("placement-streak-value", streakResult.value.current_streak);
-    setNote("placement-streak-note", "Keep showing up, one day at a time");
+    setPlacementStreak(streakResult.value);
     updateSprintDay(streakResult.value.sprint_start, streakResult.value.sprint_end, today);
   } else {
     setValueBeforeSuffix("placement-streak-value", "—");
     setNote("placement-streak-note", "Placement streak couldn't be refreshed.");
   }
 
-  await Promise.all([loadSprintAnalytics(), loadSprintHistory()]);
+  await Promise.all([
+    loadDailyDeepWork(today),
+    loadSprintAnalytics(),
+    loadSprintHistory(),
+    loadPlacementDashboard()
+  ]);
 }
 
 async function handleDeepWorkSubmit(event) {
@@ -489,35 +508,37 @@ async function handleDeepWorkSubmit(event) {
   if (!input || !button) return;
 
   const enteredMinutes = input.value.trim();
-  if (!/^\d+$/.test(enteredMinutes) || !Number.isSafeInteger(Number(enteredMinutes))) {
-    if (message) message.textContent = "Enter a whole number of minutes (0 or more).";
+  if (!/^\d+$/.test(enteredMinutes) || !Number.isSafeInteger(Number(enteredMinutes)) || Number(enteredMinutes) < 30) {
+    if (message) message.textContent = "Enter a whole number of at least 30 minutes per session.";
     return;
   }
 
   if (message) message.textContent = "";
   button.disabled = true;
   try {
-    const response = await fetch("/api/daily-entries", {
+    const category = document.getElementById("deep-work-category")?.value || "Other";
+    const response = await fetch("/api/deep-work/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: today, deep_work_minutes: Number(enteredMinutes) })
+      body: JSON.stringify({ date: today, duration_minutes: Number(enteredMinutes), category })
     });
     if (response.status === 409) {
-      await loadDailyEntry(today);
-      if (message) message.textContent = "Today's deep-work entry has already been saved.";
+      await loadDailyDeepWork(today);
+      if (message) message.textContent = "Today's deep-work session could not be saved; refresh the total and try again.";
       return;
     }
     if (!response.ok) {
       throw new Error("Couldn't save deep-work minutes. Please try again.");
     }
 
-    setDeepWorkState(Number(enteredMinutes), true, "Deep work saved.");
-    setNote("deep-work-note", "Recorded deep-work time for today.");
+    input.value = "30";
+    if (message) message.textContent = "Deep-work session saved.";
+    setNote("deep-work-note", "Recorded a V2 deep-work session for today.");
     await refreshAfterDeepWorkSave(today);
   } catch (error) {
     if (message) message.textContent = error.message;
   } finally {
-    if (button.dataset.saved !== "true") button.disabled = false;
+    button.disabled = false;
   }
 }
 async function loadDashboard() {
@@ -527,14 +548,14 @@ async function loadDashboard() {
   void loadSprintHistory();
   void loadSprintAnalytics();
   document.getElementById("deep-work-form")?.addEventListener("submit", handleDeepWorkSubmit);
+  void loadDailyDeepWork(today);
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
     getJson(`/api/daily-score/${today}`),
-    getJson("/api/placement-streak"),
-    getJson(`/api/daily-entries/${today}`)
+    getJson("/api/placement-streak")
   ]);
 
-  const [habitsResult, scoreResult, streakResult, entryResult] = results;
+  const [habitsResult, scoreResult, streakResult] = results;
 
   if (scoreResult.status === "fulfilled") {
     const score = scoreResult.value.score;
@@ -549,22 +570,11 @@ async function loadDashboard() {
   }
 
   if (streakResult.status === "fulfilled") {
-    setValueBeforeSuffix("placement-streak-value", streakResult.value.current_streak);
+    setPlacementStreak(streakResult.value);
     updateSprintDay(streakResult.value.sprint_start, streakResult.value.sprint_end, today);
   } else {
     setValueBeforeSuffix("placement-streak-value", "—");
     setNote("placement-streak-note", "Placement streak couldn't be loaded.");
-  }
-
-  if (entryResult.status === "fulfilled") {
-    setDeepWorkState(entryResult.value.deep_work_minutes, true, "Today's deep-work entry is already saved.");
-    setNote("deep-work-note", "Recorded deep-work time for today.");
-  } else if (entryResult.reason.status === 404) {
-    setDeepWorkState(0, false);
-    setNote("deep-work-note", "No daily entry for today.");
-  } else {
-    setDeepWorkState(null, false, "Today's deep-work entry couldn't be loaded.");
-    setNote("deep-work-note", "Deep-work time couldn't be loaded.");
   }
 
   if (habitsResult.status === "fulfilled" && Array.isArray(habitsResult.value)) {
