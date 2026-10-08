@@ -100,7 +100,7 @@ The inbox and serious application flow share one table, distinguished by
 This keeps the model easy to explain and avoids redundant tables or additional
 layers. Standard-library tests cover migration repeatability and preservation,
 create/read/list/update, inbox promotion, filtering, delete, invalid input,
-missing IDs, and a V1 habit completion/score workflow. All six tests pass.
+missing IDs, and a V1 habit completion/score workflow. The current standard-library test suite is described in Verification.
 ## Module 2 — Preparation Tracking
 
 Preparation Tracking records what is being studied and whether the topic is
@@ -140,7 +140,7 @@ existing progress summary after changes.
 
 Standard-library tests cover default seeding and repeatability, category and
 topic CRUD, filtering, validation, category deletion protection, practice-count
-behavior, missing records, and the existing V1/V2 regression workflows. The full suite passes with 11 tests.
+behavior, missing records, and the existing V1/V2 regression workflows. The standard-library test suite is run using the command in Verification.
 ## Module 3 — Deep Work
 
 Deep Work tracks completed focus sessions independently of the V1 daily-entry record. A manual session stores a date, duration of at least 30 minutes, one of the supported focus categories, and optional notes. Timer sessions use the same record shape and preserve their start/end timestamps. Only one timer can be active; elapsed time is calculated when it is stopped, and sessions shorter than 30 minutes are discarded.
@@ -154,6 +154,7 @@ The dashboard Deep Work panel supports the backend timer and multiple manual ses
 - `POST /api/deep-work/sessions`, `GET /api/deep-work/sessions?date=YYYY-MM-DD&category=DSA`
 - `GET /api/deep-work/sessions/{session_id}`, `DELETE /api/deep-work/sessions/{session_id}`
 - `GET /api/deep-work/daily/{date}`
+- `GET /api/deep-work/categories` returns the supported Deep Work categories used by the UI.
 - `POST /api/deep-work/timer/start`, `GET /api/deep-work/timer`, `POST /api/deep-work/timer/stop`
 
 Standard-library tests cover migration repeatability and table presence, manual session validation and CRUD, filtering and daily totals, timer exclusivity and short/completed stops, and V1 score fallback behavior.
@@ -208,3 +209,9 @@ Standard-library tests cover CRUD, filters, validation, missing references, opti
 Daily score counts only active habits and caps each category at its five scoring slots, so a score cannot exceed 100 even if extra habits are added. The response's completion counts still report all completed active habits in each category. Sprint analytics use the same active-habit rule for their completion rate.
 
 The sprint is inclusive from 2026-10-06 through 2026-11-05, which is 31 calendar dates. UI labels use "Placement Sprint" rather than "30-Day". The streak response identifies whether the sprint is upcoming, in progress, or completed and provides its `as_of_date`; after the end date, the displayed streak is explicitly historical through 2026-11-05.
+
+## Correctness and current V2 coverage
+
+The daily score is calculated dynamically from Deep Work and active habit completions. Deep Work totals use the shared session-first rule described in Module 3, and the final score is bounded from 0 to 100. The current standard-library test suite covers the V1 baseline, migration/data preservation, Opportunities, Preparation Tracking, Deep Work, Dashboard, Performance Journal, and cross-module correctness.
+
+The current frontend includes the Opportunity Management, Preparation Tracking, Deep Work, Placement Dashboard, and Performance Journal interfaces. MITs and reflections support create/read behavior; editing and deletion are not implemented.

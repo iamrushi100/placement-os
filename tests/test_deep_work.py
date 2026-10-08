@@ -140,6 +140,21 @@ class DeepWorkTests(unittest.TestCase):
                     90,
                 )
 
+    def test_score_is_zero_without_activity(self):
+        with database_connection(self.database_path) as connection:
+            score = calculate_daily_score(connection, date(2026, 10, 7))
+        self.assertEqual(score["score"], 0)
+
+    def test_negative_legacy_deep_work_cannot_make_score_negative(self):
+        requested_date = date(2026, 10, 7)
+        with database_connection(self.database_path) as connection:
+            connection.execute(
+                "INSERT INTO daily_entries (date, deep_work_minutes) VALUES (?, ?)",
+                (requested_date.isoformat(), -500),
+            )
+            score = calculate_daily_score(connection, requested_date)
+        self.assertEqual(score["score"], 0)
+
     def test_score_is_capped_at_100_and_inactive_habits_do_not_count(self):
         import sqlite3
         with database_connection(self.database_path) as connection:

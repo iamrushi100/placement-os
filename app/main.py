@@ -124,7 +124,7 @@ def calculate_daily_score(connection: sqlite3.Connection, requested_date: date) 
     deep_work_points = min(deep_work_minutes / DEEP_WORK_TARGET_MINUTES, 1) * 40
     technical_points = min(technical_completed, 5) / 5 * 30
     placement_points = min(placement_completed, 5) / 5 * 30
-    score = int(round(deep_work_points + technical_points + placement_points))
+    score = max(0, min(100, int(round(deep_work_points + technical_points + placement_points))))
 
     return {
         "date": date_string,

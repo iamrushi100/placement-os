@@ -1,3 +1,5 @@
+> **Historical V1 documentation:** This document records the original V1 milestones and is retained for project history. For the current implementation, see [PLACEMENT_OS_V2.md](PLACEMENT_OS_V2.md). V1 feature descriptions below may not describe current behavior.
+
 # Placement OS — Project Documentation
 
 > **Personal Placement Streak Tracker / Placement OS**
