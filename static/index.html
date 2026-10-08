@@ -314,31 +314,48 @@
             <div class="panel-heading compact-heading">
               <div>
                 <p class="eyebrow">FOCUSED TIME</p>
-                <h2 id="deep-work-title">Deep work</h2>
+                <h2 id="deep-work-title">Deep Work</h2>
               </div>
-              <span class="deep-work-icon" aria-hidden="true">◷</span>
+              <span class="deep-work-icon" aria-hidden="true">DW</span>
             </div>
+            <label class="deep-work-date-label" for="deep-work-date">Sessions for</label>
+            <input class="task-input" id="deep-work-date" type="date">
             <p class="deep-work-value" id="deep-work-value">0 <span>minutes</span></p>
             <p class="panel-description" id="deep-work-note">Today's focused work.</p>
-            <form id="deep-work-form">
-              <label class="sr-only" for="deep-work-minutes">Deep-work minutes</label>
-              <div class="deep-work-input-row">
-                <input class="task-input" id="deep-work-minutes" type="number" min="30" step="1" value="30">
-                <span>minutes per session</span>
+            <div class="deep-work-session-summary">
+              <span id="deep-work-session-count">0 sessions</span>
+              <span id="deep-work-total-label"></span>
+            </div>
+            <div class="deep-work-session-list" id="deep-work-sessions" aria-live="polite">
+              <p class="panel-description">Loading sessions...</p>
+            </div>
+            <div class="deep-work-timer">
+              <div class="deep-work-timer-heading">
+                <div><p class="eyebrow">FOCUS TIMER</p><strong>Focused work session</strong></div>
+                <span id="deep-work-timer-display" aria-live="off">00:00:00</span>
               </div>
               <label class="sr-only" for="deep-work-category">Session category</label>
-              <select class="task-input" id="deep-work-category">
-                <option>Other</option><option>DSA</option><option>SQL</option><option>Python</option>
-                <option>AI/ML</option><option>GenAI</option><option>Cybersecurity</option>
-                <option>Project</option><option>Interview Preparation</option>
-              </select>
-              <button class="task-input" id="deep-work-save" type="submit">Save Session</button>
+              <select class="task-input" id="deep-work-category" required><option value="">Loading categories...</option></select>
+              <div class="deep-work-timer-actions">
+                <button type="button" id="deep-work-timer-start">Start</button>
+                <button type="button" class="secondary-button" id="deep-work-timer-stop" disabled>Stop and save</button>
+              </div>
+            </div>
+            <form id="deep-work-form" class="deep-work-manual-form">
+              <h3>Add a past or manual session</h3>
+              <label class="sr-only" for="deep-work-minutes">Duration in minutes</label>
+              <div class="deep-work-input-row">
+                <input class="task-input" id="deep-work-minutes" type="number" min="30" step="1" value="30" required>
+                <span>minutes (30 minimum)</span>
+              </div>
+              <label class="sr-only" for="deep-work-notes">Optional session notes</label>
+              <input class="task-input" id="deep-work-notes" type="text" maxlength="2000" placeholder="Optional notes">
+              <button id="deep-work-save" type="submit">Add session</button>
             </form>
-            <p class="panel-description" id="deep-work-message" role="status" aria-live="polite"></p>
+            <p class="panel-description deep-work-message" id="deep-work-message" role="status" aria-live="polite"></p>
             <div class="goal-row"><span>Daily focus goal</span><span>3 hours</span></div>
             <div class="goal-track" aria-hidden="true"><span></span></div>
           </section>
-
           <section class="panel mits-panel" aria-labelledby="mits-title">
             <div class="panel-heading compact-heading">
               <div>

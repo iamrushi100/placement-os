@@ -373,3 +373,33 @@ textarea { display: block; width: 100%; min-height: 96px; resize: vertical; marg
   .preparation-filters { display: grid; width: 100%; grid-template-columns: 1fr; }
   .preparation-filters label { min-width: 0; }
 }
+
+
+.deep-work-date-label { display: block; margin: 14px 0 -5px; color: #758178; font-size: 10px; font-weight: 650; }
+.deep-work-panel > .task-input { margin-top: 8px; }
+.deep-work-session-summary { display: flex; justify-content: space-between; gap: 8px; margin: 9px 0; color: #758178; font-size: 10px; }
+.deep-work-session-list { display: grid; gap: 7px; max-height: 240px; overflow-y: auto; }
+.deep-work-session-card { padding: 10px; border: 1px solid #edf0ec; border-radius: 8px; background: #fbfcfa; }
+.deep-work-session-heading { display: flex; justify-content: space-between; gap: 8px; color: #3e5143; font-size: 11px; }
+.deep-work-session-heading span { color: var(--green); font-weight: 700; white-space: nowrap; }
+.deep-work-session-details, .deep-work-session-notes { margin: 4px 0 0; color: #78847b; font-size: 9px; }
+.deep-work-session-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+.deep-work-timer { margin-top: 17px; padding: 13px; border: 1px solid #e8eee7; border-radius: 10px; background: #f8faf7; }
+.deep-work-timer-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.deep-work-timer-heading .eyebrow { margin: 0 0 3px; }
+.deep-work-timer-heading strong { color: #526157; font-size: 10px; }
+.deep-work-timer-heading > span { color: var(--green); font-size: 17px; font-variant-numeric: tabular-nums; font-weight: 700; }
+.deep-work-timer-actions { display: flex; gap: 7px; margin-top: 9px; }
+.deep-work-timer-actions button, .deep-work-manual-form > button { min-height: 35px; flex: 1; padding: 0 10px; border: 0; border-radius: 7px; background: var(--green); color: #fff; font-size: 10px; font-weight: 650; cursor: pointer; }
+.deep-work-timer-actions .secondary-button { border: 1px solid #dfe6df; background: #fff; color: #59695e; }
+.deep-work-timer-actions button:disabled, .deep-work-manual-form button:disabled { opacity: .55; cursor: not-allowed; }
+.deep-work-manual-form { margin-top: 15px; padding-top: 13px; border-top: 1px solid #edf0ec; }
+.deep-work-manual-form h3 { margin: 0 0 4px; color: #536157; font-size: 11px; }
+.deep-work-manual-form .deep-work-input-row { margin-top: 5px; }
+.deep-work-manual-form .task-input { margin-top: 8px; }
+.deep-work-manual-form > button { width: 100%; margin-top: 8px; }
+.deep-work-message { min-height: 16px; }
+@media (max-width: 480px) {
+  .deep-work-panel { padding: 16px; }
+  .deep-work-session-summary { font-size: 9px; }
+}

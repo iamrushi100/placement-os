@@ -12,6 +12,7 @@ from app.main import (
     create_deep_work_session,
     delete_deep_work_session,
     get_daily_deep_work_summary,
+    get_deep_work_categories,
     get_deep_work_session,
     get_deep_work_sessions,
     get_deep_work_timer,
@@ -58,6 +59,12 @@ class DeepWorkTests(unittest.TestCase):
         self.assertEqual(missing.exception.status_code, 404)
         with self.assertRaises(HTTPException):
             delete_deep_work_session(999)
+
+    def test_category_list_comes_from_backend_supported_values(self):
+        self.assertEqual(
+            get_deep_work_categories(),
+            ["DSA", "SQL", "Python", "AI/ML", "GenAI", "Cybersecurity", "Project", "Interview Preparation", "Other"],
+        )
 
     def test_validation_rejects_short_session_and_unknown_category(self):
         with self.assertRaises(ValueError):

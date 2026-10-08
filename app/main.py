@@ -881,6 +881,11 @@ DEEP_WORK_SESSION_SELECT = (
 )
 
 
+@app.get("/api/deep-work/categories", response_model=list[str])
+def get_deep_work_categories():
+    return list(DeepWorkCategory.__args__)
+
+
 def _deep_work_session_dict(row: sqlite3.Row) -> dict:
     return dict(row)
 

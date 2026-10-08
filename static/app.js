@@ -427,128 +427,306 @@ function updateSprintDay(sprintStart, sprintEnd, today = getLocalDateString()) {
   display.textContent = `Day ${elapsedDays} / ${totalDays}`;
 }
 
-function setDeepWorkState(minutes, messageText = "") {
-  const display = document.getElementById("deep-work-value");
-  const input = document.getElementById("deep-work-minutes");
-  const button = document.getElementById("deep-work-save");
-  const message = document.getElementById("deep-work-message");
-  if (display && display.firstChild) {
-    display.firstChild.textContent = minutes === null ? "— " : `${minutes} `;
-  }
-  if (input) input.disabled = minutes === null;
-  if (button) button.disabled = minutes === null;
-  if (message) message.textContent = messageText;
+let deepWorkTimerInterval = null;
+
+function selectedDeepWorkDate() {
+  return document.getElementById("deep-work-date")?.value || getLocalDateString();
 }
 
-async function loadDailyDeepWork(today) {
-  try {
-    const summary = await getJson(`/api/deep-work/daily/${today}`);
-    if (summary.sessions.length > 0) {
-      setDeepWorkState(summary.total_minutes, "V2 session total; add another session if needed.");
-      setNote("deep-work-note", `${summary.sessions.length} session${summary.sessions.length === 1 ? "" : "s"} recorded today.`);
-      return summary;
-    }
+function setDeepWorkState(minutes, messageText = "") {
+  const display = document.getElementById("deep-work-value");
+  const message = document.getElementById("deep-work-message");
+  if (display && display.firstChild) {
+    display.firstChild.textContent = minutes === null ? "-- " : `${minutes} `;
+  }
+  if (message && messageText) message.textContent = messageText;
+}
 
-    try {
-      const legacyEntry = await getJson(`/api/daily-entries/${today}`);
-      setDeepWorkState(legacyEntry.deep_work_minutes, "Legacy daily total shown; saving adds a V2 session.");
-      setNote("deep-work-note", "Showing the existing V1 daily total.");
-    } catch (error) {
-      if (error.status !== 404) throw error;
-      setDeepWorkState(0);
-      setNote("deep-work-note", "No deep-work recorded today.");
+function renderDeepWorkSessions(summary) {
+  const list = document.getElementById("deep-work-sessions");
+  const count = document.getElementById("deep-work-session-count");
+  const totalLabel = document.getElementById("deep-work-total-label");
+  if (!list) return;
+
+  setDeepWorkState(summary.total_minutes);
+  if (count) count.textContent = `${summary.sessions.length} ${summary.sessions.length === 1 ? "session" : "sessions"}`;
+  if (totalLabel) totalLabel.textContent = `${summary.total_minutes} minutes total`;
+  list.replaceChildren();
+
+  if (summary.sessions.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "panel-description";
+    empty.textContent = summary.total_minutes > 0
+      ? `Legacy Deep Work total: ${summary.total_minutes} minutes. New sessions are stored separately.`
+      : "No Deep Work sessions for this date.";
+    list.append(empty);
+    setNote("deep-work-note", summary.total_minutes > 0
+      ? "Showing the legacy total because this date has no V2 sessions."
+      : "No deep-work recorded for this date.");
+    return;
+  }
+
+  setNote("deep-work-note", "V2 session total shown; legacy minutes are not added when sessions exist.");
+  summary.sessions.forEach((session) => {
+    const card = document.createElement("article");
+    card.className = "deep-work-session-card";
+    const heading = document.createElement("div");
+    heading.className = "deep-work-session-heading";
+    const category = document.createElement("strong");
+    category.textContent = session.category;
+    const duration = document.createElement("span");
+    duration.textContent = `${session.duration_minutes} min`;
+    heading.append(category, duration);
+    card.append(heading);
+
+    const details = document.createElement("p");
+    details.className = "deep-work-session-details";
+    details.textContent = session.started_at
+      ? `${new Date(session.started_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${session.ended_at ? ` to ${new Date(session.ended_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""} | ${session.source === "timer" ? "Timer" : "Manual"}`
+      : `Manual session | ${session.date}`;
+    card.append(details);
+    if (session.notes) {
+      const notes = document.createElement("p");
+      notes.className = "deep-work-session-notes";
+      notes.textContent = session.notes;
+      card.append(notes);
     }
+    list.append(card);
+  });
+}
+
+async function loadDailyDeepWork(requestedDate = selectedDeepWorkDate()) {
+  const list = document.getElementById("deep-work-sessions");
+  try {
+    const summary = await getJson(`/api/deep-work/daily/${requestedDate}`);
+    renderDeepWorkSessions(summary);
     return summary;
   } catch {
-    setDeepWorkState(null, "Today's deep-work total couldn't be loaded.");
-    setNote("deep-work-note", "Deep-work time couldn't be loaded.");
+    if (list) list.textContent = "Deep Work sessions couldn't be loaded. Check your connection and try again.";
+    setDeepWorkState(null, "Deep Work data couldn't be loaded.");
     return null;
   }
 }
 
-async function refreshAfterDeepWorkSave(today) {
+function updateTimerDisplay(timer) {
+  const display = document.getElementById("deep-work-timer-display");
+  const start = document.getElementById("deep-work-timer-start");
+  const stop = document.getElementById("deep-work-timer-stop");
+  const category = document.getElementById("deep-work-category");
+  if (!display || !start || !stop) return;
+  if (deepWorkTimerInterval) clearInterval(deepWorkTimerInterval);
+  deepWorkTimerInterval = null;
+
+  if (!timer) {
+    display.textContent = "00:00:00";
+    start.disabled = false;
+    stop.disabled = true;
+    if (category) category.disabled = false;
+    return;
+  }
+
+  if (category) {
+    category.value = timer.category;
+    category.disabled = true;
+  }
+  start.disabled = true;
+  stop.disabled = false;
+  const tick = () => {
+    const elapsed = Math.max(0, Math.floor((Date.now() - Date.parse(timer.started_at)) / 1000));
+    const hours = String(Math.floor(elapsed / 3600)).padStart(2, "0");
+    const minutes = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
+    const seconds = String(elapsed % 60).padStart(2, "0");
+    display.textContent = `${hours}:${minutes}:${seconds}`;
+  };
+  tick();
+  deepWorkTimerInterval = setInterval(tick, 1000);
+}
+
+async function loadDeepWorkCategories() {
+  const category = document.getElementById("deep-work-category");
+  const start = document.getElementById("deep-work-timer-start");
+  const save = document.getElementById("deep-work-save");
+  if (!category) return;
+  try {
+    const categories = await getJson("/api/deep-work/categories");
+    category.replaceChildren();
+    categories.forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      category.append(option);
+    });
+    if (start) start.disabled = categories.length === 0;
+    if (save) save.disabled = categories.length === 0;
+  } catch {
+    category.replaceChildren(new Option("Categories unavailable", ""));
+    category.disabled = true;
+    if (start) start.disabled = true;
+    if (save) save.disabled = true;
+    setDeepWorkState(null, "Deep Work categories couldn't be loaded.");
+  }
+}
+
+async function loadDeepWorkTimer() {
+  try {
+    const timer = await getJson("/api/deep-work/timer");
+    updateTimerDisplay(timer);
+    if (timer) setDeepWorkMessage(`Timer active for ${timer.category}.`);
+  } catch {
+    setDeepWorkMessage("The active timer couldn't be checked. Refresh to try again.");
+  }
+}
+
+function setDeepWorkMessage(message) {
+  const element = document.getElementById("deep-work-message");
+  if (element) element.textContent = message;
+}
+
+async function startDeepWorkTimer() {
+  const category = document.getElementById("deep-work-category")?.value;
+  const button = document.getElementById("deep-work-timer-start");
+  if (!category || !button) return;
+  button.disabled = true;
+  setDeepWorkMessage("");
+  try {
+    const response = await fetch("/api/deep-work/timer/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category })
+    });
+    if (!response.ok) throw new Error(response.status === 409 ? "A Deep Work timer is already active." : "The timer couldn't be started. Please try again.");
+    updateTimerDisplay(await response.json());
+    setDeepWorkMessage("Timer started. Stay focused; you can stop when your session is complete.");
+  } catch (error) {
+    button.disabled = false;
+    setDeepWorkMessage(error.message || "The timer couldn't be started. Check your connection and try again.");
+  }
+}
+
+async function refreshAfterDeepWorkSave(requestedDate) {
+  const today = getLocalDateString();
   const results = await Promise.allSettled([
-    getJson(`/api/daily-score/${today}`),
+    getJson(`/api/daily-score/${requestedDate}`),
     getJson("/api/placement-streak")
   ]);
   const [scoreResult, streakResult] = results;
-
-  if (scoreResult.status === "fulfilled") {
+  if (scoreResult.status === "fulfilled" && requestedDate === today) {
     setValueBeforeSuffix("daily-score-value", scoreResult.value.score);
     const ring = document.getElementById("daily-score-ring");
     if (ring) ring.textContent = scoreResult.value.score;
     setNote("daily-score-note", "Your effort, added up for today");
-  } else {
-    setValueBeforeSuffix("daily-score-value", "—");
-    setNote("daily-score-note", "Daily score couldn't be refreshed.");
   }
-
   if (streakResult.status === "fulfilled") {
     setPlacementStreak(streakResult.value);
     updateSprintDay(streakResult.value.sprint_start, streakResult.value.sprint_end, today);
-  } else {
-    setValueBeforeSuffix("placement-streak-value", "—");
-    setNote("placement-streak-note", "Placement streak couldn't be refreshed.");
   }
 
   await Promise.all([
-    loadDailyDeepWork(today),
+    loadDailyDeepWork(selectedDeepWorkDate()),
     loadSprintAnalytics(),
     loadSprintHistory(),
     loadPlacementDashboard()
   ]);
+  if (scoreResult.status === "rejected" && requestedDate === today) {
+    setDeepWorkMessage("Session saved, but today's score couldn't be refreshed.");
+  }
+}
+
+async function stopDeepWorkTimer() {
+  const button = document.getElementById("deep-work-timer-stop");
+  if (!button) return;
+  button.disabled = true;
+  setDeepWorkMessage("");
+  try {
+    const response = await fetch("/api/deep-work/timer/stop", { method: "POST" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(response.status === 409 ? "There is no active timer to stop." : "The timer couldn't be stopped. Please try again.");
+    updateTimerDisplay(null);
+    setDeepWorkMessage(result.message);
+    if (result.completed && result.session) {
+      const dateInput = document.getElementById("deep-work-date");
+      if (dateInput) dateInput.value = result.session.date;
+      await refreshAfterDeepWorkSave(result.session.date);
+      setDeepWorkMessage(result.message);
+    } else {
+      button.disabled = true;
+    }
+  } catch (error) {
+    button.disabled = false;
+    setDeepWorkMessage(error.message || "The timer couldn't be stopped. Check your connection and try again.");
+  }
 }
 
 async function handleDeepWorkSubmit(event) {
   event.preventDefault();
   const input = document.getElementById("deep-work-minutes");
   const button = document.getElementById("deep-work-save");
-  const message = document.getElementById("deep-work-message");
-  const today = getLocalDateString();
+  const dateInput = document.getElementById("deep-work-date");
+  const today = selectedDeepWorkDate();
   if (!input || !button) return;
 
   const enteredMinutes = input.value.trim();
   if (!/^\d+$/.test(enteredMinutes) || !Number.isSafeInteger(Number(enteredMinutes)) || Number(enteredMinutes) < 30) {
-    if (message) message.textContent = "Enter a whole number of at least 30 minutes per session.";
+    setDeepWorkMessage("Enter a whole number of at least 30 minutes per session.");
+    return;
+  }
+  if (!today || (dateInput && !dateInput.validity.valid)) {
+    setDeepWorkMessage("Choose a valid session date.");
     return;
   }
 
-  if (message) message.textContent = "";
   button.disabled = true;
+  setDeepWorkMessage("");
   try {
-    const category = document.getElementById("deep-work-category")?.value || "Other";
+    const category = document.getElementById("deep-work-category")?.value;
+    if (!category) throw new Error("Choose a Deep Work category.");
     const response = await fetch("/api/deep-work/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: today, duration_minutes: Number(enteredMinutes), category })
+      body: JSON.stringify({
+        date: today,
+        duration_minutes: Number(enteredMinutes),
+        category,
+        notes: document.getElementById("deep-work-notes")?.value.trim() || null
+      })
     });
-    if (response.status === 409) {
-      await loadDailyDeepWork(today);
-      if (message) message.textContent = "Today's deep-work session could not be saved; refresh the total and try again.";
-      return;
-    }
     if (!response.ok) {
-      throw new Error("Couldn't save deep-work minutes. Please try again.");
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(response.status === 422
+        ? "The session was rejected. Check the date, category, and minimum 30-minute duration."
+        : payload.detail || "The Deep Work session couldn't be saved. Please try again.");
     }
-
     input.value = "30";
-    if (message) message.textContent = "Deep-work session saved.";
-    setNote("deep-work-note", "Recorded a V2 deep-work session for today.");
+    document.getElementById("deep-work-notes").value = "";
+    setDeepWorkMessage("Deep Work session saved.");
     await refreshAfterDeepWorkSave(today);
   } catch (error) {
-    if (message) message.textContent = error.message;
+    setDeepWorkMessage(error.message || "The Deep Work session couldn't be saved. Check your connection and try again.");
   } finally {
     button.disabled = false;
   }
 }
+
+async function initializeDeepWork() {
+  const dateInput = document.getElementById("deep-work-date");
+  if (dateInput) {
+    dateInput.value = getLocalDateString();
+    dateInput.addEventListener("change", () => void loadDailyDeepWork(selectedDeepWorkDate()));
+  }
+  document.getElementById("deep-work-form")?.addEventListener("submit", handleDeepWorkSubmit);
+  document.getElementById("deep-work-timer-start")?.addEventListener("click", () => void startDeepWorkTimer());
+  document.getElementById("deep-work-timer-stop")?.addEventListener("click", () => void stopDeepWorkTimer());
+  await loadDeepWorkCategories();
+  await Promise.all([loadDailyDeepWork(getLocalDateString()), loadDeepWorkTimer()]);
+}
+
 async function loadDashboard() {
   const today = getLocalDateString();
   void loadMits(today);
   void loadReflection(today);
   void loadSprintHistory();
   void loadSprintAnalytics();
-  document.getElementById("deep-work-form")?.addEventListener("submit", handleDeepWorkSubmit);
-  void loadDailyDeepWork(today);
+  void initializeDeepWork();
   const results = await Promise.allSettled([
     getJson("/api/habits/today"),
     getJson(`/api/daily-score/${today}`),

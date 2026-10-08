@@ -147,6 +147,8 @@ Deep Work tracks completed focus sessions independently of the V1 daily-entry re
 
 Migration version 4 adds `deep_work_sessions` and the singleton `deep_work_active_timer` table. The daily summary, dashboard totals, score, sprint history, and analytics use the same date-level source rule: the V2 session total wins when at least one session exists for a date; otherwise they fall back to that date's legacy `daily_entries` value. This preserves older V1 data without double-counting. New dashboard entries create V2 sessions (minimum 30 minutes, with a selected category); the legacy daily-entry API remains available for compatibility. The score formula and 180-minute cap are unchanged.
 
+The dashboard Deep Work panel supports the backend timer and multiple manual sessions by date. It lists session details and totals, and retrieves supported categories from the backend. A date with V2 sessions displays their sum; when there are none, its legacy daily-entry total remains visible without being combined with session data.
+
 ### API
 
 - `POST /api/deep-work/sessions`, `GET /api/deep-work/sessions?date=YYYY-MM-DD&category=DSA`
