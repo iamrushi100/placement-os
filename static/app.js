@@ -675,6 +675,20 @@ function renderPlacementDashboard(data) {
   }
 
   const prep = data.preparation;
+  const progressValues = {
+    "preparation-total-topics": prep.total_topics,
+    "preparation-completed-topics": prep.completed,
+    "preparation-in-progress-topics": prep.in_progress,
+    "preparation-not-started-topics": prep.not_started,
+    "preparation-total-practices": prep.total_practice_count,
+    "preparation-completion-percent": `${prep.completion_percentage}%`
+  };
+  Object.entries(progressValues).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value);
+  });
+  const completionBar = document.getElementById("preparation-completion-bar");
+  if (completionBar) completionBar.style.width = `${Math.min(prep.completion_percentage, 100)}%`;
   const prepSummary = document.getElementById("dashboard-preparation-summary");
   if (prepSummary) {
     prepSummary.textContent = `${prep.completed} completed · ${prep.in_progress} in progress · ${prep.not_started} not started`;
@@ -1042,6 +1056,234 @@ function opportunityFiltersChanged() {
   renderOpportunityLists();
 }
 
+let preparationCategories = [];
+let preparationTopics = [];
+let editingPreparationTopicId = null;
+
+function populatePreparationCategoryControls() {
+  const categoryInput = document.getElementById("preparation-category");
+  const categoryFilter = document.getElementById("preparation-filter-category");
+  const selectedCategory = categoryInput.value;
+  const selectedFilter = categoryFilter.value;
+  categoryInput.replaceChildren(createTextElement("option", "", "Select a category"));
+  categoryInput.options[0].value = "";
+  categoryFilter.replaceChildren(createTextElement("option", "", "All categories"));
+  categoryFilter.options[0].value = "";
+
+  preparationCategories.forEach((category) => {
+    const formOption = createTextElement("option", "", category.name);
+    formOption.value = String(category.id);
+    categoryInput.append(formOption);
+    const filterOption = createTextElement("option", "", category.name);
+    filterOption.value = String(category.id);
+    categoryFilter.append(filterOption);
+  });
+  if (preparationCategories.some((category) => String(category.id) === selectedCategory)) {
+    categoryInput.value = selectedCategory;
+  }
+  if (preparationCategories.some((category) => String(category.id) === selectedFilter)) {
+    categoryFilter.value = selectedFilter;
+  }
+
+  const statusFilter = document.getElementById("preparation-filter-status");
+  if (statusFilter.options.length === 1) {
+    Array.from(document.getElementById("preparation-status").options).forEach((status) => {
+      const option = createTextElement("option", "", status.textContent);
+      option.value = status.value;
+      statusFilter.append(option);
+    });
+  }
+  categoryInput.disabled = preparationCategories.length === 0;
+  document.getElementById("preparation-save-button").disabled = preparationCategories.length === 0;
+}
+
+function resetPreparationForm() {
+  document.getElementById("preparation-form").reset();
+  document.getElementById("preparation-form-title").textContent = "Add a topic";
+  document.getElementById("preparation-save-button").textContent = "Save topic";
+  document.getElementById("preparation-cancel-edit").hidden = true;
+  document.getElementById("preparation-form-message").textContent = "";
+  editingPreparationTopicId = null;
+}
+
+function beginPreparationEdit(topic) {
+  editingPreparationTopicId = topic.id;
+  document.getElementById("preparation-form-title").textContent = "Edit topic";
+  document.getElementById("preparation-save-button").textContent = "Save changes";
+  document.getElementById("preparation-cancel-edit").hidden = false;
+  document.getElementById("preparation-category").value = String(topic.category_id);
+  document.getElementById("preparation-name").value = topic.name;
+  document.getElementById("preparation-status").value = topic.status;
+  document.getElementById("preparation-notes").value = topic.notes || "";
+  document.getElementById("preparation-management").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function setPreparationListMessage(message) {
+  document.getElementById("preparation-list-message").textContent = message;
+}
+
+function renderPreparationTopics() {
+  const container = document.getElementById("preparation-topic-groups");
+  const categoryFilter = document.getElementById("preparation-filter-category").value;
+  const statusFilter = document.getElementById("preparation-filter-status").value;
+  const filtered = preparationTopics.filter((topic) =>
+    (!categoryFilter || String(topic.category_id) === categoryFilter)
+    && (!statusFilter || topic.status === statusFilter)
+  );
+  container.replaceChildren();
+  if (preparationCategories.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "panel-description";
+    empty.textContent = "No preparation categories are available.";
+    container.append(empty);
+    return;
+  }
+  if (filtered.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "panel-description";
+    empty.textContent = preparationTopics.length === 0
+      ? "No topics yet. Add a topic above to start your preparation plan."
+      : "No topics match these filters.";
+    container.append(empty);
+    return;
+  }
+
+  preparationCategories.forEach((category) => {
+    const items = filtered.filter((topic) => topic.category_id === category.id);
+    if (items.length === 0) return;
+    const group = document.createElement("section");
+    group.className = "preparation-topic-group";
+    const heading = document.createElement("div");
+    heading.className = "preparation-topic-group-heading";
+    heading.append(
+      createTextElement("h3", "", category.name),
+      createTextElement("span", "count-pill", `${items.length} ${items.length === 1 ? "topic" : "topics"}`)
+    );
+    const list = document.createElement("div");
+    list.className = "preparation-topic-list";
+    items.forEach((topic) => {
+      const card = document.createElement("article");
+      card.className = "preparation-topic-card";
+      card.append(createTextElement("h4", "", topic.name));
+      const meta = document.createElement("div");
+      meta.className = "preparation-topic-meta";
+      const statusClass = topic.status === "Completed"
+        ? "completed"
+        : topic.status === "In Progress" ? "in-progress" : "";
+      meta.append(
+        createTextElement("span", `preparation-topic-status ${statusClass}`, topic.status),
+        createTextElement("span", "", `${topic.practice_count} ${topic.practice_count === 1 ? "practice" : "practices"}`)
+      );
+      card.append(meta);
+      if (topic.notes) card.append(createTextElement("p", "preparation-topic-notes", topic.notes));
+
+      const actions = document.createElement("div");
+      actions.className = "opportunity-card-actions";
+      const practice = document.createElement("button");
+      practice.type = "button";
+      practice.textContent = "Practice";
+      practice.addEventListener("click", () => void recordPreparationPractice(topic.id));
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "secondary-button";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => beginPreparationEdit(topic));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "delete-button";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", () => void deletePreparationTopic(topic));
+      actions.append(practice, edit, remove);
+      card.append(actions);
+      list.append(card);
+    });
+    group.append(heading, list);
+    container.append(group);
+  });
+}
+
+async function loadPreparation() {
+  try {
+    const [categories, topics] = await Promise.all([
+      requestApi("/api/preparation/categories"),
+      requestApi("/api/preparation/topics")
+    ]);
+    preparationCategories = categories;
+    preparationTopics = topics;
+    populatePreparationCategoryControls();
+    renderPreparationTopics();
+  } catch (error) {
+    document.getElementById("preparation-topic-groups").textContent =
+      "Preparation topics couldn't be loaded. Please try again.";
+    setPreparationListMessage(error.message || "Preparation data couldn't be loaded.");
+  }
+}
+
+async function refreshPreparationViews(message) {
+  await Promise.all([loadPreparation(), loadPlacementDashboard()]);
+  setPreparationListMessage(message);
+}
+
+async function handlePreparationSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const method = editingPreparationTopicId === null ? "POST" : "PUT";
+  const path = editingPreparationTopicId === null
+    ? "/api/preparation/topics"
+    : `/api/preparation/topics/${editingPreparationTopicId}`;
+  const payload = {
+    category_id: Number(document.getElementById("preparation-category").value),
+    name: document.getElementById("preparation-name").value.trim(),
+    status: document.getElementById("preparation-status").value,
+    notes: document.getElementById("preparation-notes").value
+  };
+  const button = document.getElementById("preparation-save-button");
+  const message = document.getElementById("preparation-form-message");
+  button.disabled = true;
+  message.textContent = "";
+  try {
+    await requestApi(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    resetPreparationForm();
+    message.textContent = method === "POST" ? "Topic added." : "Topic updated.";
+    await Promise.all([loadPreparation(), loadPlacementDashboard()]);
+  } catch (error) {
+    message.textContent = error.status === 422
+      ? "Check the category, topic name, and status, then try again."
+      : error.message || "Couldn't save this topic.";
+  } finally {
+    button.disabled = preparationCategories.length === 0;
+  }
+}
+
+async function recordPreparationPractice(topicId) {
+  try {
+    await requestApi(`/api/preparation/topics/${topicId}/practice`, { method: "POST" });
+    await refreshPreparationViews("Practice recorded. Count updated.");
+  } catch (error) {
+    setPreparationListMessage(error.message || "Couldn't record practice.");
+  }
+}
+
+async function deletePreparationTopic(topic) {
+  if (!window.confirm(`Delete ${topic.name}? This cannot be undone.`)) return;
+  try {
+    await requestApi(`/api/preparation/topics/${topic.id}`, { method: "DELETE" });
+    if (editingPreparationTopicId === topic.id) resetPreparationForm();
+    await refreshPreparationViews("Topic deleted.");
+  } catch (error) {
+    setPreparationListMessage(error.message || "Couldn't delete this topic.");
+  }
+}
+
+function preparationFiltersChanged() {
+  renderPreparationTopics();
+}
+
 let editingPerformanceEntryId = null;
 let performanceOptionsLoaded = false;
 
@@ -1282,6 +1524,12 @@ function performanceFiltersChanged() {
   void loadPerformanceEntries();
 }
 
+document.getElementById("preparation-form")?.addEventListener("submit", handlePreparationSubmit);
+document.getElementById("preparation-cancel-edit")?.addEventListener("click", resetPreparationForm);
+["preparation-filter-category", "preparation-filter-status"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", preparationFiltersChanged);
+});
+void loadPreparation();
 document.getElementById("opportunity-form")?.addEventListener("submit", handleOpportunitySubmit);
 document.getElementById("opportunity-cancel-edit")?.addEventListener("click", resetOpportunityForm);
 ["opportunity-filter-status", "opportunity-filter-priority", "opportunity-filter-serious"].forEach((id) => {

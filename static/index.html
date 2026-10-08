@@ -58,7 +58,7 @@
             <strong class="dashboard-metric-value" id="dashboard-active-applications">—</strong>
             <span class="dashboard-card-link">View pipeline ↓</span>
           </a>
-          <a class="panel dashboard-metric-card" href="#dashboard-preparation">
+          <a class="panel dashboard-metric-card" href="#preparation-management">
             <span class="eyebrow">PREPARATION</span>
             <strong class="dashboard-metric-value" id="dashboard-preparation-percent">—</strong>
             <span class="dashboard-metric-caption" id="dashboard-preparation-count">Loading topics…</span>
@@ -178,6 +178,57 @@
             <div class="opportunity-group-heading"><h3 id="opportunity-serious-title">Serious Applications</h3><span class="count-pill" id="opportunity-serious-count">0</span></div>
             <div class="opportunity-list" id="opportunity-serious-list"><p class="panel-description">Loading applications...</p></div>
           </section>
+        </div>
+      </section>
+
+      <section class="panel preparation-management-panel" id="preparation-management" aria-labelledby="preparation-management-title">
+        <div class="panel-heading preparation-management-heading">
+          <div>
+            <p class="eyebrow">LEARN, PRACTICE, PROGRESS</p>
+            <h2 id="preparation-management-title">Preparation Tracking</h2>
+          </div>
+          <span class="count-pill">Topics and practice</span>
+        </div>
+
+        <div class="preparation-progress-grid" aria-label="Preparation progress">
+          <article class="analytics-card"><p class="analytics-label">Total Topics</p><p class="analytics-value" id="preparation-total-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">Completed</p><p class="analytics-value" id="preparation-completed-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">In Progress</p><p class="analytics-value" id="preparation-in-progress-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">Not Started</p><p class="analytics-value" id="preparation-not-started-topics">0</p></article>
+          <article class="analytics-card"><p class="analytics-label">Total Practice</p><p class="analytics-value" id="preparation-total-practices">0</p></article>
+        </div>
+        <div class="preparation-progress-line">
+          <div class="preparation-progress-track"><span id="preparation-completion-bar"></span></div>
+          <strong id="preparation-completion-percent">0%</strong>
+        </div>
+
+        <form id="preparation-form" class="opportunity-form preparation-form">
+          <h3 id="preparation-form-title">Add a topic</h3>
+          <div class="opportunity-form-grid preparation-form-grid">
+            <label class="opportunity-field">Category<select id="preparation-category" required><option value="">Loading categories...</option></select></label>
+            <label class="opportunity-field">Topic name<input id="preparation-name" maxlength="200" required></label>
+            <label class="opportunity-field">Status<select id="preparation-status">
+              <option>Not Started</option><option>In Progress</option><option>Completed</option>
+            </select></label>
+          </div>
+          <label class="opportunity-field preparation-notes-field">Notes<textarea id="preparation-notes" rows="2" maxlength="2000"></textarea></label>
+          <div class="opportunity-form-actions">
+            <button type="submit" id="preparation-save-button">Save topic</button>
+            <button type="button" class="secondary-button" id="preparation-cancel-edit" hidden>Cancel edit</button>
+          </div>
+          <p class="preparation-message" id="preparation-form-message" role="status" aria-live="polite"></p>
+        </form>
+
+        <div class="preparation-list-heading">
+          <div><p class="eyebrow">YOUR STUDY PLAN</p><h3>Preparation Topics</h3></div>
+          <div class="preparation-filters" aria-label="Filter preparation topics">
+            <label>Category<select id="preparation-filter-category"><option value="">All categories</option></select></label>
+            <label>Status<select id="preparation-filter-status"><option value="">All statuses</option></select></label>
+          </div>
+        </div>
+        <p class="preparation-list-message" id="preparation-list-message" role="status" aria-live="polite"></p>
+        <div class="preparation-topic-groups" id="preparation-topic-groups">
+          <p class="panel-description">Loading preparation topics...</p>
         </div>
       </section>
 

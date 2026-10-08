@@ -328,3 +328,48 @@ textarea { display: block; width: 100%; min-height: 96px; resize: vertical; marg
   .opportunity-filters { display: grid; width: 100%; grid-template-columns: 1fr; }
   .opportunity-filters label { min-width: 0; }
 }
+
+
+.preparation-management-panel { margin: 0 0 22px; padding: 22px 23px; }
+.preparation-management-heading { margin-bottom: 16px; }
+.preparation-progress-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+.preparation-progress-grid .analytics-card { padding: 10px 12px; }
+.preparation-progress-grid .analytics-value { font-size: 16px; }
+.preparation-progress-line { display: flex; align-items: center; gap: 10px; margin: 11px 2px 17px; color: #657269; font-size: 10px; }
+.preparation-progress-track { flex: 1; height: 7px; overflow: hidden; border-radius: 6px; background: #edf0ec; }
+.preparation-progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: #85a889; transition: width .2s ease; }
+.preparation-form { margin-bottom: 0; }
+.preparation-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.preparation-notes-field { margin-top: 11px; }
+.preparation-message, .preparation-list-message { min-height: 16px; margin: 8px 0 0; color: #59745e; font-size: 11px; }
+.preparation-message:empty, .preparation-list-message:empty { display: none; }
+.preparation-list-heading { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin-top: 22px; }
+.preparation-list-heading .eyebrow { margin-bottom: 4px; }
+.preparation-list-heading h3, .preparation-topic-group-heading h3 { margin: 0; font-size: 14px; }
+.preparation-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.preparation-filters label { display: grid; min-width: 150px; gap: 4px; color: #758178; font-size: 10px; font-weight: 650; }
+.preparation-filters select { min-height: 37px; padding: 8px 9px; border: 1px solid #e4e9e3; border-radius: 7px; background: #fff; color: var(--ink); font: inherit; font-size: 11px; }
+.preparation-topic-groups { display: grid; gap: 13px; margin-top: 12px; }
+.preparation-topic-group { padding: 14px; border: 1px solid #edf0ec; border-radius: 10px; background: #fbfcfa; }
+.preparation-topic-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.preparation-topic-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.preparation-topic-card { min-width: 0; padding: 13px; border: 1px solid #e9eee8; border-radius: 9px; background: #fff; }
+.preparation-topic-card h4 { margin: 0; color: #34483a; font-size: 13px; overflow-wrap: anywhere; }
+.preparation-topic-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 7px 0; color: #758178; font-size: 10px; }
+.preparation-topic-status { display: inline-flex; padding: 3px 8px; border-radius: 20px; background: #f0f3ee; color: #617265; font-size: 9px; font-weight: 700; }
+.preparation-topic-status.completed { background: #e7f1e6; color: #41694c; }
+.preparation-topic-status.in-progress { background: #eaf0f1; color: #536c73; }
+.preparation-topic-notes { margin: 7px 0 0; color: #59675e; font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.preparation-topic-card .opportunity-card-actions { margin-top: 10px; }
+.preparation-topic-card .opportunity-card-actions button { min-height: 31px; padding: 0 10px; }
+@media (max-width: 760px) {
+  .preparation-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .preparation-progress-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .preparation-topic-list { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .preparation-management-panel { padding: 15px; }
+  .preparation-form-grid, .preparation-progress-grid { grid-template-columns: 1fr 1fr; }
+  .preparation-filters { display: grid; width: 100%; grid-template-columns: 1fr; }
+  .preparation-filters label { min-width: 0; }
+}

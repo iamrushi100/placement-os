@@ -134,6 +134,10 @@ Topic lists accept `category_id` and `status` filters. Status and count rules
 are validated in Pydantic and constrained in SQLite. The design uses two simple
 related tables without practice-session records or extra service layers.
 
+The dashboard Preparation Tracking UI loads categories and topics from the API,
+supports topic create/edit/delete and practice recording, and refreshes the
+existing progress summary after changes.
+
 Standard-library tests cover default seeding and repeatability, category and
 topic CRUD, filtering, validation, category deletion protection, practice-count
 behavior, missing records, and the existing V1/V2 regression workflows. The full suite passes with 11 tests.
